@@ -9,14 +9,13 @@ const withPWA = withPWAInit({
   workboxOptions: {
     disableDevLogs: true,
     runtimeCaching: [
-      // Cache page navigations (HTML) — network-first, fall back to cache
+      // Cache page navigations (HTML) — serve from cache instantly, update in background
       {
         urlPattern: /^https?.*\/(?!api\/).*/,
-        handler: "NetworkFirst",
+        handler: "StaleWhileRevalidate",
         options: {
           cacheName: "pages-cache",
           expiration: { maxEntries: 32, maxAgeSeconds: 24 * 60 * 60 },
-          networkTimeoutSeconds: 10,
         },
       },
       // Cache static assets (JS, CSS, fonts, images) — cache-first

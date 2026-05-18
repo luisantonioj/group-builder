@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import Sidebar from "@/components/layout/sidebar";
 import Topbar from "@/components/layout/topbar";
 import SyncBar from "@/components/layout/sync-bar";
+import CacheWarmer from "@/components/layout/cache-warmer";
 import { AppProvider } from "@/lib/store";
 import { ToastProvider } from "@/components/ui/toast";
 
@@ -48,6 +49,7 @@ export default async function AppLayout({
             <SyncBar />
           </div>
         </div>
+        <CacheWarmer />
       </ToastProvider>
     </AppProvider>
   );
