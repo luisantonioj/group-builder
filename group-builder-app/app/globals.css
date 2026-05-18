@@ -27,9 +27,7 @@ body {
 
 /* ─── App Shell ──────────────────────────────────────────────────────────────── */
 .app-shell {
-  display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
-  grid-template-rows: auto 1fr;
+  display: block;
   min-height: 100vh;
 }
 
