@@ -1,0 +1,225 @@
+// Shepherd's Grouping System — Prisma Schema
+// Neon PostgreSQL (serverless) — pair with @prisma/client
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  SHEPHERD
+  VIEWER
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum RoomGender {
+  MALE
+  FEMALE
+  MIXED
+}
+
+enum RelationshipType {
+  CLASSMATE
+  SIBLING
+  FAMILY
+  CHURCHMATE
+  BARKADA
+  OTHER
+}
+
+enum ConnectionSource {
+  AUTO
+  MANUAL
+}
+
+enum ConflictStatus {
+  ACTIVE
+  DISMISSED
+}
+
+// ─── Users (Shepherds) ────────────────────────────────────────────────────────
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  role         Role       @default(SHEPHERD)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  activities   Activity[]
+}
+
+// ─── Batch ────────────────────────────────────────────────────────────────────
+
+model Batch {
+  id         String      @id @default(cuid())
+  name       String      @unique  // e.g. "YE #18"
+  isActive   Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+  candidates Candidate[]
+  groups     Group[]
+  rooms      Room[]
+}
+
+// ─── Candidate (Lamb) ─────────────────────────────────────────────────────────
+// Sensitive PII fields are encrypted at the application layer (AES-256-GCM)
+// before write and decrypted on read via Prisma middleware in lib/prisma.ts.
+// Fields used for sorting/filtering (fullName, gender, age, batch) stay plaintext.
+
+model Candidate {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+
+  // Plaintext — used for search, sort, display
+  fullName  String
+  lastName  String
+  firstName String
+  gender    Gender
+  age       Int?
+  school    String?
+  inviterName String?
+  howHeard  String?
+  yeBatch   String   // e.g. "YE #19"
+
+  // Encrypted PII columns (stored as base64 "iv:tag:ciphertext")
+  birthdayEnc      String?  // Date as ISO string, encrypted
+  addressEnc       String?
+  facebookEnc      String?
+  contactEnc       String?  // primary unique identifier for duplicates
+  contactHash      String?  // HMAC-SHA256 for duplicate detection without decryption
+  fatherNameEnc    String?
+  fatherContactEnc String?
+  motherNameEnc    String?
+  motherContactEnc String?
+  allergiesEnc     String?  // flagged visually on cards
+  shepherdNotesEnc String?  // internal only
+
+  // Assignments
+  groupId String?
+  roomId  String?
+  batchId String
+
+  batch           Batch        @relation(fields: [batchId], references: [id])
+  group           Group?       @relation(fields: [groupId], references: [id])
+  room            Room?        @relation(fields: [roomId], references: [id])
+  connectionsFrom Connection[] @relation("FromCandidate")
+  connectionsTo   Connection[] @relation("ToCandidate")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([batchId])
+  @@index([contactHash])
+  @@index([groupId])
+  @@index([roomId])
+}
+
+// ─── Connection (Relationship Graph Edge) ─────────────────────────────────────
+
+model Connection {
+  id               String           @id @default(cuid())
+  fromId           String
+  toId             String
+  relationshipType RelationshipType
+  source           ConnectionSource
+  note             String?
+
+  from      Candidate @relation("FromCandidate", fields: [fromId], references: [id], onDelete: Cascade)
+  to        Candidate @relation("ToCandidate", fields: [toId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+
+  @@unique([fromId, toId])  // one edge per direction; check both directions in queries
+  @@index([fromId])
+  @@index([toId])
+}
+
+// ─── Group ────────────────────────────────────────────────────────────────────
+
+model Group {
+  id       String  @id @default(cuid())
+  name     String  // e.g. "Kordero 1"
+  label    String? // optional alias
+  capacity Int     @default(12)
+  isLocked Boolean @default(false)
+  batchId  String
+
+  batch      Batch       @relation(fields: [batchId], references: [id])
+  candidates Candidate[]
+  conflicts  Conflict[]  @relation("GroupConflicts")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([batchId])
+}
+
+// ─── Room ─────────────────────────────────────────────────────────────────────
+
+model Room {
+  id       String     @id @default(cuid())
+  name     String
+  floor    String?
+  building String?
+  capacity Int
+  bedCount Int
+  gender   RoomGender
+  batchId  String
+
+  batch      Batch       @relation(fields: [batchId], references: [id])
+  candidates Candidate[]
+  conflicts  Conflict[]  @relation("RoomConflicts")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([batchId])
+}
+
+// ─── Conflict ─────────────────────────────────────────────────────────────────
+
+model Conflict {
+  id           String         @id @default(cuid())
+  candidateAId String
+  candidateBId String
+  groupId      String?
+  roomId       String?
+  status       ConflictStatus @default(ACTIVE)
+  shepherdNote String?
+  dismissedBy  String?
+  dismissedAt  DateTime?
+
+  group     Group?   @relation("GroupConflicts", fields: [groupId], references: [id])
+  room      Room?    @relation("RoomConflicts", fields: [roomId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([groupId])
+  @@index([roomId])
+}
+
+// ─── Activity Log ─────────────────────────────────────────────────────────────
+
+model Activity {
+  id          String   @id @default(cuid())
+  userId      String
+  action      String   // "created", "updated", "deleted", "assigned", "imported"
+  entityType  String   // "candidate", "group", "room", "connection"
+  entityId    String?
+  description String
+  user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}

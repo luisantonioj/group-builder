@@ -1,0 +1,361 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  DragStartEvent,
+  DragEndEvent,
+  DragOverEvent,
+  closestCenter,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  KeyboardSensor,
+  useDroppable,
+  useDraggable,
+} from "@dnd-kit/core";
+import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { useApp } from "@/lib/store";
+import { useToast } from "@/components/ui/toast";
+import { Chip, GenderChip } from "@/components/ui/chip";
+import Initials from "@/components/ui/initials";
+import Modal from "@/components/ui/modal";
+import type { Candidate, Room, Gender, RoomGender } from "@/types";
+
+type GenderTab = "MALE" | "FEMALE";
+
+export default function RoomsPage() {
+  const { candidates, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom, updateRoom } = useApp();
+  const { showToast } = useToast();
+
+  const [genderTab, setGenderTab] = useState<GenderTab>("MALE");
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [overRoomId, setOverRoomId] = useState<string | null>(null);
+  const [addRoomOpen, setAddRoomOpen] = useState(false);
+  const [newRoom, setNewRoom] = useState({ name: "", floor: "", capacity: 8, bedCount: 8, gender: "MALE" as RoomGender });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const tabRooms = useMemo(
+    () => rooms.filter((r) => r.gender === genderTab || r.gender === "MIXED"),
+    [rooms, genderTab]
+  );
+
+  const unassigned = useMemo(
+    () => candidates.filter((c) => !c.roomId && c.gender === genderTab),
+    [candidates, genderTab]
+  );
+
+  const roomCandidates = useMemo(() => {
+    const map = new Map<string, Candidate[]>();
+    for (const r of rooms) {
+      map.set(r.id, candidates.filter((c) => c.roomId === r.id));
+    }
+    return map;
+  }, [rooms, candidates]);
+
+  const conflictIdsByRoom = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const c of roomConflicts) {
+      if (!c.roomId) continue;
+      if (!map.has(c.roomId)) map.set(c.roomId, new Set());
+      map.get(c.roomId)!.add(c.candidateAId);
+      map.get(c.roomId)!.add(c.candidateBId);
+    }
+    return map;
+  }, [roomConflicts]);
+
+  const activeDragCandidate = useMemo(
+    () => candidates.find((c) => c.id === activeDragId),
+    [candidates, activeDragId]
+  );
+
+  const totalOccupied = rooms.reduce((sum, r) => sum + (roomCandidates.get(r.id)?.length ?? 0), 0);
+  const totalCapacity = rooms.reduce((sum, r) => sum + r.capacity, 0);
+
+  function onDragStart(e: DragStartEvent) {
+    setActiveDragId(String(e.active.id));
+  }
+
+  function onDragOver(e: DragOverEvent) {
+    const overId = e.over?.id;
+    if (overId && rooms.find((r) => r.id === overId)) {
+      setOverRoomId(String(overId));
+    } else {
+      setOverRoomId(null);
+    }
+  }
+
+  function onDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    setActiveDragId(null);
+    setOverRoomId(null);
+    if (!over) return;
+
+    const candidateId = String(active.id);
+    const targetId = String(over.id);
+    const targetRoom = rooms.find((r) => r.id === targetId);
+
+    if (targetRoom) {
+      // Hard gender constraint
+      const cand = candidates.find((c) => c.id === candidateId);
+      if (!cand) return;
+      if (targetRoom.gender !== "MIXED" && targetRoom.gender !== cand.gender) {
+        showToast(`Gender mismatch — ${cand.fullName} cannot be assigned to ${targetRoom.name}.`, "error");
+        return;
+      }
+      const members = roomCandidates.get(targetRoom.id) ?? [];
+      if (members.length >= targetRoom.capacity) {
+        showToast(`${targetRoom.name} is at full capacity (${targetRoom.capacity}).`, "warning");
+        return;
+      }
+      assignToRoom(candidateId, targetId);
+      const hasConflict = members.some(
+        (m) => adjacency.get(candidateId)?.has(m.id) || adjacency.get(m.id)?.has(candidateId)
+      );
+      if (hasConflict) {
+        showToast(`⚠ Conflict: ${cand.fullName} has a known connection in ${targetRoom.name}`, "warning");
+      }
+      return;
+    }
+
+    if (targetId === "room-pool") {
+      assignToRoom(candidateId, null);
+    }
+  }
+
+  function handleAddRoom() {
+    addRoom({
+      id: `r${Date.now()}`,
+      ...newRoom,
+      building: null,
+      batchId: "batch-ye19",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    setAddRoomOpen(false);
+    setNewRoom({ name: "", floor: "", capacity: 8, bedCount: 8, gender: "MALE" });
+    showToast("Room added", "success");
+  }
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
+      <div>
+        {/* Header */}
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Room Assignment</h1>
+            <p className="page-sub">{totalOccupied} / {totalCapacity} beds filled</p>
+          </div>
+          <div style={{ display: "flex", gap: "var(--space-sm)" }}>
+            <button className="btn btn-secondary" onClick={() => setAddRoomOpen(true)}>
+              + Add Room
+            </button>
+          </div>
+        </div>
+
+        {/* Status bar */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "var(--space-lg)", marginBottom: "var(--space-xl)" }}>
+          <div className="stat-tile">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-sm)" }}>
+              <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>Capacity Used</span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-sm)", color: "var(--text-secondary)" }}>{totalOccupied}/{totalCapacity}</span>
+            </div>
+            <div style={{ height: 8, background: "var(--border-color)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${totalCapacity > 0 ? (totalOccupied / totalCapacity) * 100 : 0}%`, background: "var(--color-primary)", borderRadius: "var(--radius-full)", transition: "width 0.3s" }} />
+            </div>
+          </div>
+          <div className="stat-tile">
+            <div className="stat-value" style={{ color: roomConflicts.length > 0 ? "var(--color-danger)" : "var(--color-success)" }}>{roomConflicts.length}</div>
+            <div className="stat-label">Room Conflicts</div>
+          </div>
+          <div className="stat-tile">
+            <div className="stat-value" style={{ color: "var(--color-primary)" }}>
+              {candidates.filter((c) => !c.roomId).length}
+            </div>
+            <div className="stat-label">Unassigned</div>
+          </div>
+        </div>
+
+        {/* Gender tabs */}
+        <div className="tabs" style={{ marginBottom: "var(--space-xl)" }}>
+          {(["MALE", "FEMALE"] as const).map((g) => (
+            <button key={g} className={`tab ${genderTab === g ? "active" : ""}`} onClick={() => setGenderTab(g)}>
+              {g === "MALE" ? "♂ Male Rooms" : "♀ Female Rooms"}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: "var(--space-xl)", alignItems: "start" }}>
+          {/* Candidate Pool */}
+          <div className="card" style={{ position: "sticky", top: "calc(var(--topbar-height) + var(--space-lg))" }}>
+            <div className="card-head">
+              <div>
+                <div style={{ fontWeight: "var(--font-weight-semibold)" }}>{genderTab === "MALE" ? "♂ Male" : "♀ Female"} Pool</div>
+                <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{unassigned.length} unassigned</div>
+              </div>
+            </div>
+            <div id="room-pool" style={{ padding: "var(--space-sm)", maxHeight: "60vh", overflowY: "auto" }}>
+              {unassigned.map((c) => (
+                <RoomDraggableCard key={c.id} candidate={c} groups={groups} />
+              ))}
+              {unassigned.length === 0 && (
+                <div style={{ textAlign: "center", padding: "var(--space-xl) 0", color: "var(--text-muted)", fontSize: "var(--font-size-sm)" }}>
+                  All {genderTab.toLowerCase()} candidates assigned 🎉
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Room Cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "var(--space-lg)" }}>
+            {tabRooms.map((room) => {
+              const members = roomCandidates.get(room.id) ?? [];
+              const conflicts = conflictIdsByRoom.get(room.id) ?? new Set();
+              return (
+                <RoomDropZone
+                  key={room.id}
+                  room={room}
+                  members={members}
+                  conflictIds={conflicts}
+                  isOver={overRoomId === room.id}
+                  groups={groups}
+                  onRemove={(cid) => assignToRoom(cid, null)}
+                />
+              );
+            })}
+            {tabRooms.length === 0 && (
+              <div className="card" style={{ padding: "var(--space-2xl)", textAlign: "center", color: "var(--text-muted)", gridColumn: "1/-1" }}>
+                No {genderTab.toLowerCase()} rooms yet. Click &quot;Add Room&quot; to create one.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <DragOverlay>
+        {activeDragCandidate && (
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--color-primary)", borderRadius: "var(--radius-md)", padding: "8px 12px", boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: "var(--space-sm)", fontSize: "var(--font-size-sm)", width: 220, opacity: 0.95 }}>
+            <Initials name={activeDragCandidate.fullName} gender={activeDragCandidate.gender} size={28} />
+            <span style={{ fontWeight: "var(--font-weight-semibold)" }}>{activeDragCandidate.fullName}</span>
+          </div>
+        )}
+      </DragOverlay>
+
+      {/* Add Room Modal */}
+      <Modal open={addRoomOpen} title="Add Room" onClose={() => setAddRoomOpen(false)}
+        footer={
+          <><button className="btn btn-secondary" onClick={() => setAddRoomOpen(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleAddRoom}>Add Room</button></>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+          <div className="form-group">
+            <label className="form-label">Room Name *</label>
+            <input className="input" value={newRoom.name} onChange={(e) => setNewRoom((p) => ({ ...p, name: e.target.value }))} placeholder="e.g. Upper Room C" required />
+          </div>
+          <div className="form-grid-2">
+            <div className="form-group">
+              <label className="form-label">Floor</label>
+              <input className="input" value={newRoom.floor} onChange={(e) => setNewRoom((p) => ({ ...p, floor: e.target.value }))} placeholder="e.g. 2nd Floor" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Gender</label>
+              <select className="input" value={newRoom.gender} onChange={(e) => setNewRoom((p) => ({ ...p, gender: e.target.value as RoomGender }))}>
+                <option value="MALE">Male</option>
+                <option value="FEMALE">Female</option>
+                <option value="MIXED">Mixed</option>
+              </select>
+            </div>
+          </div>
+          <div className="form-grid-2">
+            <div className="form-group">
+              <label className="form-label">Capacity</label>
+              <input className="input" type="number" min={1} max={30} value={newRoom.capacity} onChange={(e) => setNewRoom((p) => ({ ...p, capacity: Number(e.target.value) }))} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Bed Count</label>
+              <input className="input" type="number" min={1} max={30} value={newRoom.bedCount} onChange={(e) => setNewRoom((p) => ({ ...p, bedCount: Number(e.target.value) }))} />
+            </div>
+          </div>
+        </div>
+      </Modal>
+    </DndContext>
+  );
+}
+
+function RoomDraggableCard({ candidate: c, groups }: { candidate: Candidate; groups: { id: string; name: string }[] }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
+  const groupName = groups.find((g) => g.id === c.groupId)?.name;
+  return (
+    <div ref={setNodeRef} {...listeners} {...attributes}
+      style={{ background: "var(--bg-page)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "8px 10px", marginBottom: "var(--space-xs)", display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "grab", opacity: isDragging ? 0.4 : 1, transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined }}
+    >
+      <Initials name={c.fullName} gender={c.gender} size={26} fontSize={10} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.fullName}</div>
+        {groupName && <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{groupName}</div>}
+      </div>
+    </div>
+  );
+}
+
+function RoomDropZone({ room, members, conflictIds, isOver, groups, onRemove }: {
+  room: Room;
+  members: Candidate[];
+  conflictIds: Set<string>;
+  isOver: boolean;
+  groups: { id: string; name: string }[];
+  onRemove: (id: string) => void;
+}) {
+  const { setNodeRef } = useDroppable({ id: room.id });
+  const hasConflicts = conflictIds.size > 0;
+  return (
+    <div ref={setNodeRef}
+      style={{ background: "var(--bg-card)", border: `2px solid ${hasConflicts ? "var(--color-conflict-border)" : isOver ? "var(--color-primary)" : "var(--border-color)"}`, borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: isOver ? "0 0 0 4px rgba(46,134,193,0.15)" : "var(--shadow-sm)" }}
+    >
+      <div style={{ padding: "12px var(--space-lg)", borderBottom: "1px solid var(--border-color)", background: hasConflicts ? "var(--color-conflict-bg)" : "var(--bg-hover)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 4v16" /><path d="M2 8h18a2 2 0 0 1 2 2v10" /><path d="M2 17h20" /><path d="M6 8v9" />
+          </svg>
+          <span style={{ fontWeight: "var(--font-weight-semibold)", fontSize: "var(--font-size-sm)" }}>{room.name}</span>
+          <GenderChip gender={room.gender === "MIXED" ? "MALE" : room.gender as Gender} />
+          {hasConflicts && <Chip kind="danger">⚠</Chip>}
+        </div>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{members.length}/{room.capacity}</span>
+      </div>
+      {room.floor && (
+        <div style={{ padding: "4px var(--space-lg)", fontSize: "var(--font-size-xs)", color: "var(--text-muted)", borderBottom: "1px solid var(--border-color)" }}>
+          {room.floor} · {room.bedCount} beds
+        </div>
+      )}
+      <div style={{ padding: "var(--space-sm)", minHeight: 60 }}>
+        {members.length === 0 && (
+          <div style={{ textAlign: "center", padding: "var(--space-lg) var(--space-sm)", color: "var(--text-muted)", fontSize: "var(--font-size-xs)", border: "1.5px dashed var(--border-color)", borderRadius: "var(--radius-md)", margin: 4 }}>Drag candidates here</div>
+        )}
+        {members.map((m) => {
+          const groupName = groups.find((g) => g.id === m.groupId)?.name;
+          return (
+            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", padding: "5px 8px", borderRadius: "var(--radius-sm)", marginBottom: 2, background: conflictIds.has(m.id) ? "var(--color-conflict-bg)" : "var(--bg-page)", border: `1px solid ${conflictIds.has(m.id) ? "var(--color-conflict-border)" : "transparent"}` }}>
+              <Initials name={m.fullName} gender={m.gender} size={22} fontSize={9} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", color: conflictIds.has(m.id) ? "var(--color-conflict-text)" : "var(--text-primary)" }}>{m.fullName}{conflictIds.has(m.id) && " ⚠"}</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{m.age ? `Age ${m.age}` : ""}{groupName ? ` · ${groupName}` : ""}</div>
+              </div>
+              <button onClick={() => onRemove(m.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2, display: "flex", alignItems: "center" }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,178 @@
+/*
+ * Shepherd's Grouping System — Global Theme
+ * All colors, spacing, and typography live here.
+ * To change the look of the entire app, edit only this file.
+ * Components reference these variables — no hardcoded hex values in components.
+ */
+
+/* ─── Light Mode (default) ──────────────────────────────────────────────────── */
+:root {
+  /* Brand colors */
+  --color-primary:       #2e86c1;
+  --color-primary-hover: #1a6fa0;
+  --color-accent:        #2e86c1;
+  --color-danger:        #dc2626;
+  --color-danger-hover:  #b91c1c;
+  --color-warning:       #d97706;
+  --color-success:       #16a34a;
+
+  /* Gender indicators — used consistently everywhere */
+  --color-male:          #3b82f6;
+  --color-male-bg:       #eff6ff;
+  --color-female:        #ec4899;
+  --color-female-bg:     #fdf2f8;
+
+  /* Conflict / allergy severity */
+  --color-conflict-bg:     #fef2f2;
+  --color-conflict-border: #fca5a5;
+  --color-conflict-text:   #dc2626;
+  --color-allergy-badge:   #f97316;
+
+  /* Surfaces */
+  --bg-page:      #f4f6f9;
+  --bg-card:      #ffffff;
+  --bg-sidebar:   #0f1b2d;
+  --bg-modal:     #ffffff;
+  --bg-input:     #ffffff;
+  --bg-hover:     #f1f5f9;
+  --bg-selected:  #eff6ff;
+  --border-color: #e2e8f0;
+  --border-focus: #2e86c1;
+
+  /* Text */
+  --text-primary:    #0f172a;
+  --text-secondary:  #475569;
+  --text-muted:      #94a3b8;
+  --text-on-primary: #ffffff;
+  --text-on-dark:    #f1f5f9;
+  --text-sidebar:    #cbd5e1;
+  --text-sidebar-active: #ffffff;
+
+  /* Typography */
+  --font-sans:         "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono:         "JetBrains Mono", monospace;
+  --font-size-xs:      0.75rem;   /* 12px */
+  --font-size-sm:      0.8125rem; /* 13px */
+  --font-size-md:      0.875rem;  /* 14px */
+  --font-size-lg:      1rem;      /* 16px */
+  --font-size-xl:      1.125rem;  /* 18px */
+  --font-size-2xl:     1.25rem;   /* 20px */
+  --font-size-3xl:     1.5rem;    /* 24px */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:   700;
+
+  /* Spacing */
+  --space-xs:  0.25rem;  /* 4px */
+  --space-sm:  0.5rem;   /* 8px */
+  --space-md:  0.75rem;  /* 12px */
+  --space-lg:  1rem;     /* 16px */
+  --space-xl:  1.5rem;   /* 24px */
+  --space-2xl: 2rem;     /* 32px */
+
+  /* Border radius */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm:  0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md:  0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg:  0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+  --shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+  /* Sidebar */
+  --sidebar-width: 244px;
+  --topbar-height: 56px;
+
+  /* Transitions */
+  --transition-fast:   150ms ease;
+  --transition-normal: 200ms ease;
+}
+
+/* ─── Dark Mode ──────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --color-primary:       #3b9dd4;
+  --color-primary-hover: #2e86c1;
+  --color-accent:        #3b9dd4;
+  --color-danger:        #f87171;
+  --color-danger-hover:  #ef4444;
+  --color-warning:       #fbbf24;
+  --color-success:       #4ade80;
+
+  --color-male:          #60a5fa;
+  --color-male-bg:       #1e3a5f;
+  --color-female:        #f472b6;
+  --color-female-bg:     #4a1942;
+
+  --color-conflict-bg:     #2d1515;
+  --color-conflict-border: #7f1d1d;
+  --color-conflict-text:   #f87171;
+  --color-allergy-badge:   #fb923c;
+
+  --bg-page:      #0b1120;
+  --bg-card:      #111827;
+  --bg-sidebar:   #080e1a;
+  --bg-modal:     #1f2937;
+  --bg-input:     #1f2937;
+  --bg-hover:     #1f2937;
+  --bg-selected:  #1e3a5f;
+  --border-color: #1f2937;
+  --border-focus: #3b9dd4;
+
+  --text-primary:    #f1f5f9;
+  --text-secondary:  #94a3b8;
+  --text-muted:      #64748b;
+  --text-on-primary: #ffffff;
+  --text-on-dark:    #f1f5f9;
+  --text-sidebar:    #94a3b8;
+  --text-sidebar-active: #f1f5f9;
+
+  --shadow-sm:  0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-md:  0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg:  0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+}
+
+/* Auto dark mode — before user has set a preference */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-primary:       #3b9dd4;
+    --color-primary-hover: #2e86c1;
+    --color-accent:        #3b9dd4;
+    --color-danger:        #f87171;
+    --color-danger-hover:  #ef4444;
+    --color-warning:       #fbbf24;
+    --color-success:       #4ade80;
+    --color-male:          #60a5fa;
+    --color-male-bg:       #1e3a5f;
+    --color-female:        #f472b6;
+    --color-female-bg:     #4a1942;
+    --color-conflict-bg:     #2d1515;
+    --color-conflict-border: #7f1d1d;
+    --color-conflict-text:   #f87171;
+    --color-allergy-badge:   #fb923c;
+    --bg-page:      #0b1120;
+    --bg-card:      #111827;
+    --bg-sidebar:   #080e1a;
+    --bg-modal:     #1f2937;
+    --bg-input:     #1f2937;
+    --bg-hover:     #1f2937;
+    --bg-selected:  #1e3a5f;
+    --border-color: #1f2937;
+    --border-focus: #3b9dd4;
+    --text-primary:    #f1f5f9;
+    --text-secondary:  #94a3b8;
+    --text-muted:      #64748b;
+    --text-sidebar:    #94a3b8;
+    --text-sidebar-active: #f1f5f9;
+    --shadow-sm:  0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --shadow-md:  0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+    --shadow-lg:  0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+    --shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.5);
+  }
+}
