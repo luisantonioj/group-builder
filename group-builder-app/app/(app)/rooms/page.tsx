@@ -7,7 +7,7 @@ import {
   DragStartEvent,
   DragEndEvent,
   DragOverEvent,
-  closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
   PointerSensor,
@@ -26,7 +26,7 @@ import type { Candidate, Room, Gender, RoomGender } from "@/types";
 type GenderTab = "MALE" | "FEMALE";
 
 export default function RoomsPage() {
-  const { candidates, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom, updateRoom } = useApp();
+  const { candidates, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom } = useApp();
   const { showToast } = useToast();
 
   const [genderTab, setGenderTab] = useState<GenderTab>("MALE");
@@ -94,37 +94,41 @@ export default function RoomsPage() {
     const { active, over } = e;
     setActiveDragId(null);
     setOverRoomId(null);
-    if (!over) return;
 
     const candidateId = String(active.id);
-    const targetId = String(over.id);
-    const targetRoom = rooms.find((r) => r.id === targetId);
 
-    if (targetRoom) {
-      // Hard gender constraint
-      const cand = candidates.find((c) => c.id === candidateId);
-      if (!cand) return;
-      if (targetRoom.gender !== "MIXED" && targetRoom.gender !== cand.gender) {
-        showToast(`Gender mismatch — ${cand.fullName} cannot be assigned to ${targetRoom.name}.`, "error");
-        return;
-      }
-      const members = roomCandidates.get(targetRoom.id) ?? [];
-      if (members.length >= targetRoom.capacity) {
-        showToast(`${targetRoom.name} is at full capacity (${targetRoom.capacity}).`, "warning");
-        return;
-      }
-      assignToRoom(candidateId, targetId);
-      const hasConflict = members.some(
-        (m) => adjacency.get(candidateId)?.has(m.id) || adjacency.get(m.id)?.has(candidateId)
-      );
-      if (hasConflict) {
-        showToast(`⚠ Conflict: ${cand.fullName} has a known connection in ${targetRoom.name}`, "warning");
-      }
+    // Dropped outside all zones or on the pool → return to pool
+    if (!over || over.id === "room-pool") {
+      assignToRoom(candidateId, null);
       return;
     }
 
-    if (targetId === "room-pool") {
-      assignToRoom(candidateId, null);
+    const targetId = String(over.id);
+    const targetRoom = rooms.find((r) => r.id === targetId);
+    if (!targetRoom) return;
+
+    const cand = candidates.find((c) => c.id === candidateId);
+    if (!cand) return;
+
+    // Already in this room — no-op
+    if (cand.roomId === targetRoom.id) return;
+
+    // Hard gender constraint
+    if (targetRoom.gender !== "MIXED" && targetRoom.gender !== cand.gender) {
+      showToast(`Gender mismatch — ${cand.fullName} cannot be assigned to ${targetRoom.name}.`, "error");
+      return;
+    }
+    const members = roomCandidates.get(targetRoom.id) ?? [];
+    if (members.length >= targetRoom.capacity) {
+      showToast(`${targetRoom.name} is at full capacity (${targetRoom.capacity}).`, "warning");
+      return;
+    }
+    assignToRoom(candidateId, targetId);
+    const hasConflict = members.some(
+      (m) => adjacency.get(candidateId)?.has(m.id) || adjacency.get(m.id)?.has(candidateId)
+    );
+    if (hasConflict) {
+      showToast(`⚠ Conflict: ${cand.fullName} has a known connection in ${targetRoom.name}`, "warning");
     }
   }
 
@@ -143,7 +147,7 @@ export default function RoomsPage() {
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
       <div>
         {/* Header */}
         <div className="page-header">
@@ -152,9 +156,7 @@ export default function RoomsPage() {
             <p className="page-sub">{totalOccupied} / {totalCapacity} beds filled</p>
           </div>
           <div style={{ display: "flex", gap: "var(--space-sm)" }}>
-            <button className="btn btn-secondary" onClick={() => setAddRoomOpen(true)}>
-              + Add Room
-            </button>
+            <button className="btn btn-secondary" onClick={() => setAddRoomOpen(true)}>+ Add Room</button>
           </div>
         </div>
 
@@ -174,9 +176,7 @@ export default function RoomsPage() {
             <div className="stat-label">Room Conflicts</div>
           </div>
           <div className="stat-tile">
-            <div className="stat-value" style={{ color: "var(--color-primary)" }}>
-              {candidates.filter((c) => !c.roomId).length}
-            </div>
+            <div className="stat-value" style={{ color: "var(--color-primary)" }}>{candidates.filter((c) => !c.roomId).length}</div>
             <div className="stat-label">Unassigned</div>
           </div>
         </div>
@@ -199,7 +199,7 @@ export default function RoomsPage() {
                 <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{unassigned.length} unassigned</div>
               </div>
             </div>
-            <div id="room-pool" style={{ padding: "var(--space-sm)", maxHeight: "60vh", overflowY: "auto" }}>
+            <PoolDropZone id="room-pool" style={{ padding: "var(--space-sm)", maxHeight: "60vh", overflowY: "auto" }}>
               {unassigned.map((c) => (
                 <RoomDraggableCard key={c.id} candidate={c} groups={groups} />
               ))}
@@ -208,7 +208,7 @@ export default function RoomsPage() {
                   All {genderTab.toLowerCase()} candidates assigned 🎉
                 </div>
               )}
-            </div>
+            </PoolDropZone>
           </div>
 
           {/* Room Cards */}
@@ -246,7 +246,6 @@ export default function RoomsPage() {
         )}
       </DragOverlay>
 
-      {/* Add Room Modal */}
       <Modal open={addRoomOpen} title="Add Room" onClose={() => setAddRoomOpen(false)}
         footer={
           <><button className="btn btn-secondary" onClick={() => setAddRoomOpen(false)}>Cancel</button>
@@ -288,12 +287,48 @@ export default function RoomsPage() {
   );
 }
 
+// ─── Pool Drop Zone ───────────────────────────────────────────────────────────
+
+function PoolDropZone({ id, children, style }: { id: string; children: React.ReactNode; style?: React.CSSProperties }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        ...style,
+        borderRadius: "var(--radius-md)",
+        transition: "background 0.15s",
+        background: isOver ? "var(--bg-selected, rgba(46,134,193,0.08))" : undefined,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─── Draggable Card (pool) ────────────────────────────────────────────────────
+
 function RoomDraggableCard({ candidate: c, groups }: { candidate: Candidate; groups: { id: string; name: string }[] }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: c.id });
   const groupName = groups.find((g) => g.id === c.groupId)?.name;
   return (
-    <div ref={setNodeRef} {...listeners} {...attributes}
-      style={{ background: "var(--bg-page)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-md)", padding: "8px 10px", marginBottom: "var(--space-xs)", display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "grab", opacity: isDragging ? 0.4 : 1, transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined }}
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{
+        background: "var(--bg-page)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "var(--radius-md)",
+        padding: "8px 10px",
+        marginBottom: "var(--space-xs)",
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-sm)",
+        cursor: isDragging ? "grabbing" : "grab",
+        opacity: isDragging ? 0.35 : 1,
+        transition: "opacity 0.15s",
+      }}
     >
       <Initials name={c.fullName} gender={c.gender} size={26} fontSize={10} />
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -303,6 +338,60 @@ function RoomDraggableCard({ candidate: c, groups }: { candidate: Candidate; gro
     </div>
   );
 }
+
+// ─── Draggable Member (inside room) ──────────────────────────────────────────
+
+function RoomDraggableMember({ candidate: m, isConflict, onRemove, groups }: {
+  candidate: Candidate;
+  isConflict: boolean;
+  onRemove: () => void;
+  groups: { id: string; name: string }[];
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: m.id });
+  const groupName = groups.find((g) => g.id === m.groupId)?.name;
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-sm)",
+        padding: "5px 8px",
+        borderRadius: "var(--radius-sm)",
+        marginBottom: 2,
+        background: isConflict ? "var(--color-conflict-bg)" : "var(--bg-page)",
+        border: `1px solid ${isConflict ? "var(--color-conflict-border)" : "transparent"}`,
+        cursor: isDragging ? "grabbing" : "grab",
+        opacity: isDragging ? 0.35 : 1,
+        transition: "opacity 0.15s",
+      }}
+    >
+      <Initials name={m.fullName} gender={m.gender} size={22} fontSize={9} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", color: isConflict ? "var(--color-conflict-text)" : "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {m.fullName}{isConflict && " ⚠"}
+        </div>
+        <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
+          {m.age ? `Age ${m.age}` : ""}{groupName ? ` · ${groupName}` : ""}
+        </div>
+      </div>
+      <button
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2, display: "flex", alignItems: "center", flexShrink: 0 }}
+        title="Return to pool"
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+// ─── Room Drop Zone ───────────────────────────────────────────────────────────
 
 function RoomDropZone({ room, members, conflictIds, isOver, groups, onRemove }: {
   room: Room;
@@ -315,8 +404,16 @@ function RoomDropZone({ room, members, conflictIds, isOver, groups, onRemove }: 
   const { setNodeRef } = useDroppable({ id: room.id });
   const hasConflicts = conflictIds.size > 0;
   return (
-    <div ref={setNodeRef}
-      style={{ background: "var(--bg-card)", border: `2px solid ${hasConflicts ? "var(--color-conflict-border)" : isOver ? "var(--color-primary)" : "var(--border-color)"}`, borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: isOver ? "0 0 0 4px rgba(46,134,193,0.15)" : "var(--shadow-sm)" }}
+    <div
+      ref={setNodeRef}
+      style={{
+        background: "var(--bg-card)",
+        border: `2px solid ${hasConflicts ? "var(--color-conflict-border)" : isOver ? "var(--color-primary)" : "var(--border-color)"}`,
+        borderRadius: "var(--radius-lg)",
+        overflow: "hidden",
+        transition: "border-color 0.15s, box-shadow 0.15s",
+        boxShadow: isOver ? "0 0 0 4px rgba(46,134,193,0.15)" : "var(--shadow-sm)",
+      }}
     >
       <div style={{ padding: "12px var(--space-lg)", borderBottom: "1px solid var(--border-color)", background: hasConflicts ? "var(--color-conflict-bg)" : "var(--bg-hover)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
@@ -334,27 +431,21 @@ function RoomDropZone({ room, members, conflictIds, isOver, groups, onRemove }: 
           {room.floor} · {room.bedCount} beds
         </div>
       )}
-      <div style={{ padding: "var(--space-sm)", minHeight: 60 }}>
+      <div style={{ padding: "var(--space-sm)", minHeight: 64 }}>
         {members.length === 0 && (
-          <div style={{ textAlign: "center", padding: "var(--space-lg) var(--space-sm)", color: "var(--text-muted)", fontSize: "var(--font-size-xs)", border: "1.5px dashed var(--border-color)", borderRadius: "var(--radius-md)", margin: 4 }}>Drag candidates here</div>
+          <div style={{ textAlign: "center", padding: "var(--space-lg) var(--space-sm)", color: "var(--text-muted)", fontSize: "var(--font-size-xs)", border: "1.5px dashed var(--border-color)", borderRadius: "var(--radius-md)", margin: 4 }}>
+            Drag candidates here
+          </div>
         )}
-        {members.map((m) => {
-          const groupName = groups.find((g) => g.id === m.groupId)?.name;
-          return (
-            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", padding: "5px 8px", borderRadius: "var(--radius-sm)", marginBottom: 2, background: conflictIds.has(m.id) ? "var(--color-conflict-bg)" : "var(--bg-page)", border: `1px solid ${conflictIds.has(m.id) ? "var(--color-conflict-border)" : "transparent"}` }}>
-              <Initials name={m.fullName} gender={m.gender} size={22} fontSize={9} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", color: conflictIds.has(m.id) ? "var(--color-conflict-text)" : "var(--text-primary)" }}>{m.fullName}{conflictIds.has(m.id) && " ⚠"}</div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>{m.age ? `Age ${m.age}` : ""}{groupName ? ` · ${groupName}` : ""}</div>
-              </div>
-              <button onClick={() => onRemove(m.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2, display: "flex", alignItems: "center" }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-          );
-        })}
+        {members.map((m) => (
+          <RoomDraggableMember
+            key={m.id}
+            candidate={m}
+            isConflict={conflictIds.has(m.id)}
+            groups={groups}
+            onRemove={() => onRemove(m.id)}
+          />
+        ))}
       </div>
     </div>
   );

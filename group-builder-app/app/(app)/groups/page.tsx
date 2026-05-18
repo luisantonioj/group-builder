@@ -1,23 +1,25 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo } from "react";
 import {
   DndContext,
   DragOverlay,
   DragStartEvent,
   DragEndEvent,
   DragOverEvent,
-  closestCenter,
+  pointerWithin,
   useSensor,
   useSensors,
   PointerSensor,
   KeyboardSensor,
+  useDraggable,
+  useDroppable,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useApp } from "@/lib/store";
 import { useToast } from "@/components/ui/toast";
 import SearchInput from "@/components/ui/search-input";
-import { Chip, GenderChip } from "@/components/ui/chip";
+import { Chip } from "@/components/ui/chip";
 import Initials from "@/components/ui/initials";
 import Modal from "@/components/ui/modal";
 import type { Candidate, Group } from "@/types";
@@ -94,39 +96,41 @@ export default function GroupsPage() {
     const { active, over } = e;
     setActiveDragId(null);
     setOverGroupId(null);
-    if (!over) return;
 
     const candidateId = String(active.id);
-    const targetId = String(over.id);
 
-    // Dropping on a group card
-    const targetGroup = groups.find((g) => g.id === targetId);
-    if (targetGroup) {
-      if (targetGroup.isLocked) {
-        showToast(`${targetGroup.name} is locked. Unlock to add candidates.`, "warning");
-        return;
-      }
-      const members = groupedCandidates.get(targetGroup.id) ?? [];
-      if (members.length >= targetGroup.capacity) {
-        showToast(`${targetGroup.name} is at full capacity (${targetGroup.capacity}).`, "warning");
-        return;
-      }
-      assignToGroup(candidateId, targetId);
-
-      // Check for instant conflict
-      const cand = candidates.find((c) => c.id === candidateId);
-      const hasConflict = members.some(
-        (m) => adjacency.get(candidateId)?.has(m.id) || adjacency.get(m.id)?.has(candidateId)
-      );
-      if (hasConflict && cand) {
-        showToast(`⚠ Conflict: ${cand.fullName} has a known connection in ${targetGroup.name}`, "warning");
-      }
+    // Dropped outside all zones or on the pool → return to pool
+    if (!over || over.id === "pool") {
+      assignToGroup(candidateId, null);
       return;
     }
 
-    // Dropping back on the pool
-    if (targetId === "pool") {
-      assignToGroup(candidateId, null);
+    const targetId = String(over.id);
+    const targetGroup = groups.find((g) => g.id === targetId);
+    if (!targetGroup) return;
+
+    const cand = candidates.find((c) => c.id === candidateId);
+    if (!cand) return;
+
+    // Already in this group — no-op
+    if (cand.groupId === targetGroup.id) return;
+
+    if (targetGroup.isLocked) {
+      showToast(`${targetGroup.name} is locked. Unlock to add candidates.`, "warning");
+      return;
+    }
+    const members = groupedCandidates.get(targetGroup.id) ?? [];
+    if (members.length >= targetGroup.capacity) {
+      showToast(`${targetGroup.name} is at full capacity (${targetGroup.capacity}).`, "warning");
+      return;
+    }
+    assignToGroup(candidateId, targetId);
+
+    const hasConflict = members.some(
+      (m) => adjacency.get(candidateId)?.has(m.id) || adjacency.get(m.id)?.has(candidateId)
+    );
+    if (hasConflict) {
+      showToast(`⚠ Conflict: ${cand.fullName} has a known connection in ${targetGroup.name}`, "warning");
     }
   }
 
@@ -163,7 +167,7 @@ export default function GroupsPage() {
   const totalConflicts = groupConflicts.length;
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
       <div>
         {/* Header */}
         <div className="page-header">
@@ -173,23 +177,19 @@ export default function GroupsPage() {
           </div>
           <div style={{ display: "flex", gap: "var(--space-sm)" }}>
             <button className="btn btn-secondary" onClick={handleClearAll}>Clear All</button>
-            <button className="btn btn-secondary" onClick={handleAutoDistribute}>
-              ✨ Distribute Evenly
-            </button>
-            <button className="btn btn-secondary" onClick={() => setSetupOpen(true)}>
-              Configure Groups
-            </button>
+            <button className="btn btn-secondary" onClick={handleAutoDistribute}>✨ Distribute Evenly</button>
+            <button className="btn btn-secondary" onClick={() => setSetupOpen(true)}>Configure Groups</button>
           </div>
         </div>
 
-        {/* Status banner */}
+        {/* Conflict banner */}
         {totalConflicts > 0 && (
           <div style={{ background: "var(--color-conflict-bg)", border: "1px solid var(--color-conflict-border)", borderRadius: "var(--radius-md)", padding: "10px var(--space-lg)", marginBottom: "var(--space-lg)", display: "flex", alignItems: "center", gap: "var(--space-sm)", fontSize: "var(--font-size-sm)", color: "var(--color-conflict-text)" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
               <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
-            {totalConflicts} conflict{totalConflicts !== 1 ? "s" : ""} detected — connected candidates in the same group. Conflicts are non-blocking; shepherds can override.
+            {totalConflicts} conflict{totalConflicts !== 1 ? "s" : ""} detected — connected candidates in the same group.
           </div>
         )}
 
@@ -212,7 +212,7 @@ export default function GroupsPage() {
                 ))}
               </div>
             </div>
-            <div id="pool" style={{ maxHeight: "60vh", overflowY: "auto", padding: "0 var(--space-md) var(--space-md)" }}>
+            <PoolDropZone id="pool" style={{ maxHeight: "60vh", overflowY: "auto", padding: "0 var(--space-md) var(--space-md)" }}>
               {unassigned.map((c) => (
                 <DraggableCard key={c.id} candidate={c} adjacency={adjacency} />
               ))}
@@ -221,7 +221,7 @@ export default function GroupsPage() {
                   {candidates.filter((c) => !c.groupId).length === 0 ? "All candidates assigned! 🎉" : "No candidates match filter."}
                 </div>
               )}
-            </div>
+            </PoolDropZone>
           </div>
 
           {/* Right: Group Cards */}
@@ -258,7 +258,6 @@ export default function GroupsPage() {
         </div>
       </div>
 
-      {/* Drag overlay */}
       <DragOverlay>
         {activeDragCandidate && (
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--color-primary)", borderRadius: "var(--radius-md)", padding: "8px 12px", boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: "var(--space-sm)", fontSize: "var(--font-size-sm)", width: 220, opacity: 0.95 }}>
@@ -268,7 +267,6 @@ export default function GroupsPage() {
         )}
       </DragOverlay>
 
-      {/* Setup modal */}
       <Modal open={setupOpen} title="Configure Groups" onClose={() => setSetupOpen(false)}
         footer={
           <><button className="btn btn-secondary" onClick={() => setSetupOpen(false)}>Cancel</button>
@@ -293,13 +291,30 @@ export default function GroupsPage() {
   );
 }
 
-// ─── Draggable Candidate Card ─────────────────────────────────────────────────
+// ─── Pool Drop Zone ───────────────────────────────────────────────────────────
 
-import { useDraggable } from "@dnd-kit/core";
+function PoolDropZone({ id, children, style }: { id: string; children: React.ReactNode; style?: React.CSSProperties }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        ...style,
+        borderRadius: "var(--radius-md)",
+        transition: "background 0.15s",
+        background: isOver ? "var(--bg-selected, rgba(46,134,193,0.08))" : undefined,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+// ─── Draggable Card (pool) ────────────────────────────────────────────────────
 
 function DraggableCard({ candidate: c, adjacency }: { candidate: Candidate; adjacency: Map<string, Set<string>> }) {
   const degree = adjacency.get(c.id)?.size ?? 0;
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: c.id });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: c.id });
   return (
     <div
       ref={setNodeRef}
@@ -314,10 +329,9 @@ function DraggableCard({ candidate: c, adjacency }: { candidate: Candidate; adja
         display: "flex",
         alignItems: "center",
         gap: "var(--space-sm)",
-        cursor: "grab",
-        opacity: isDragging ? 0.4 : 1,
-        transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
-        transition: isDragging ? undefined : "opacity 0.15s",
+        cursor: isDragging ? "grabbing" : "grab",
+        opacity: isDragging ? 0.35 : 1,
+        transition: "opacity 0.15s",
       }}
     >
       <Initials name={c.fullName} gender={c.gender} size={26} fontSize={10} />
@@ -330,9 +344,55 @@ function DraggableCard({ candidate: c, adjacency }: { candidate: Candidate; adja
   );
 }
 
-// ─── Group Drop Zone ──────────────────────────────────────────────────────────
+// ─── Draggable Member (inside group) ─────────────────────────────────────────
 
-import { useDroppable } from "@dnd-kit/core";
+function DraggableMember({ candidate: m, isConflict, isLocked, onRemove }: {
+  candidate: Candidate;
+  isConflict: boolean;
+  isLocked: boolean;
+  onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: m.id });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-sm)",
+        padding: "5px 8px",
+        borderRadius: "var(--radius-sm)",
+        marginBottom: 2,
+        background: isConflict ? "var(--color-conflict-bg)" : "var(--bg-page)",
+        border: `1px solid ${isConflict ? "var(--color-conflict-border)" : "transparent"}`,
+        cursor: isDragging ? "grabbing" : "grab",
+        opacity: isDragging ? 0.35 : 1,
+        transition: "opacity 0.15s",
+      }}
+    >
+      <Initials name={m.fullName} gender={m.gender} size={22} fontSize={9} />
+      <span style={{ flex: 1, fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", color: isConflict ? "var(--color-conflict-text)" : "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {m.fullName}{isConflict && " ⚠"}
+      </span>
+      {!isLocked && (
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2, lineHeight: 1, display: "flex", alignItems: "center", borderRadius: "var(--radius-xs)", flexShrink: 0 }}
+          title="Return to pool"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── Group Drop Zone ──────────────────────────────────────────────────────────
 
 function GroupDropZone({ group, members, conflictIds, isFull, isOver, onRemove, onLock, onRename }: {
   group: Group;
@@ -358,28 +418,24 @@ function GroupDropZone({ group, members, conflictIds, isFull, isOver, onRemove, 
         border: `2px solid ${hasConflicts ? "var(--color-conflict-border)" : isOver ? "var(--color-primary)" : "var(--border-color)"}`,
         borderRadius: "var(--radius-lg)",
         overflow: "hidden",
-        transition: "border-color 0.15s",
+        transition: "border-color 0.15s, box-shadow 0.15s",
         boxShadow: isOver ? "0 0 0 4px rgba(46,134,193,0.15)" : "var(--shadow-sm)",
       }}
     >
-      {/* Group header */}
+      {/* Header */}
       <div style={{ padding: "12px var(--space-lg)", borderBottom: `1px solid var(--border-color)`, display: "flex", alignItems: "center", justifyContent: "space-between", background: hasConflicts ? "var(--color-conflict-bg)" : "var(--bg-hover)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
           <div style={{ width: 26, height: 26, borderRadius: "var(--radius-sm)", background: "var(--color-primary)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-bold)" }}>
             {group.name.charAt(group.name.length - 1)}
           </div>
           <span style={{ fontWeight: "var(--font-weight-semibold)", fontSize: "var(--font-size-sm)", color: "var(--text-primary)" }}>{group.name}</span>
-          {hasConflicts && <Chip kind="danger">⚠ {conflictIds.size / 2}</Chip>}
+          {hasConflicts && <Chip kind="danger">⚠ {Math.floor(conflictIds.size / 2)}</Chip>}
           {group.isLocked && <Chip kind="default">🔒</Chip>}
           {isFull && <Chip kind="success">Full</Chip>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{members.length}/{group.capacity}</span>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => onLock(!group.isLocked)}
-            title={group.isLocked ? "Unlock" : "Lock"}
-          >
+          <button className="btn btn-ghost btn-sm" onClick={() => onLock(!group.isLocked)} title={group.isLocked ? "Unlock" : "Lock"}>
             {group.isLocked ? "🔓" : "🔒"}
           </button>
         </div>
@@ -394,43 +450,20 @@ function GroupDropZone({ group, members, conflictIds, isFull, isOver, onRemove, 
       )}
 
       {/* Members */}
-      <div style={{ padding: "var(--space-sm)", minHeight: 60 }}>
+      <div style={{ padding: "var(--space-sm)", minHeight: 64 }}>
         {members.length === 0 && (
           <div style={{ textAlign: "center", padding: "var(--space-lg) var(--space-sm)", color: "var(--text-muted)", fontSize: "var(--font-size-xs)", border: "1.5px dashed var(--border-color)", borderRadius: "var(--radius-md)", margin: "4px" }}>
             Drag candidates here
           </div>
         )}
         {members.map((m) => (
-          <div
+          <DraggableMember
             key={m.id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--space-sm)",
-              padding: "5px 8px",
-              borderRadius: "var(--radius-sm)",
-              marginBottom: 2,
-              background: conflictIds.has(m.id) ? "var(--color-conflict-bg)" : "var(--bg-page)",
-              border: `1px solid ${conflictIds.has(m.id) ? "var(--color-conflict-border)" : "transparent"}`,
-            }}
-          >
-            <Initials name={m.fullName} gender={m.gender} size={22} fontSize={9} />
-            <span style={{ flex: 1, fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", color: conflictIds.has(m.id) ? "var(--color-conflict-text)" : "var(--text-primary)" }}>
-              {m.fullName}
-              {conflictIds.has(m.id) && " ⚠"}
-            </span>
-            {!group.isLocked && (
-              <button
-                onClick={() => onRemove(m.id)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2, lineHeight: 1, display: "flex", alignItems: "center", borderRadius: "var(--radius-xs)" }}
-                title="Remove from group"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            )}
-          </div>
+            candidate={m}
+            isConflict={conflictIds.has(m.id)}
+            isLocked={group.isLocked}
+            onRemove={() => onRemove(m.id)}
+          />
         ))}
       </div>
     </div>
