@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { buildAdjacencyMap, detectGroupConflicts } from "@/lib/conflict-detection";
-import type { Candidate } from "@/types";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await auth();
@@ -27,16 +25,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       data: { groupId: params.id },
     });
 
-    // Check for conflicts after assignment
-    const connections = await prisma.connection.findMany({ where: { batchId: group.batchId } as unknown as Parameters<typeof prisma.connection.findMany>[0]["where"] });
-    const adjacency = buildAdjacencyMap(connections as unknown as Parameters<typeof buildAdjacencyMap>[0]);
-    const allCandidates = await prisma.candidate.findMany({ where: { batchId: group.batchId } });
-    const conflicts = detectGroupConflicts(
-      [{ id: group.id, candidates: allCandidates.filter((c) => c.groupId === group.id) as unknown as Candidate[] }],
-      adjacency
-    );
+    // Detect conflicts by checking connections among the updated group members
+    const memberIds = [...group.candidates.map((c) => c.id), candidateId];
+    const connections = await prisma.connection.findMany({
+      where: {
+        fromId: { in: memberIds },
+        toId: { in: memberIds },
+      },
+    });
+    const conflictCount = connections.length;
 
-    return NextResponse.json({ data: { assigned: true, conflicts } });
+    return NextResponse.json({ data: { assigned: true, conflictCount } });
   } catch {
     return NextResponse.json({ error: "Failed to assign" }, { status: 500 });
   }

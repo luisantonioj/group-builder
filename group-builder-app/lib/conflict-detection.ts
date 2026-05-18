@@ -102,9 +102,12 @@ export function findClusters(
     visited.add(id);
     const candidate = candidateMap.get(id);
     if (candidate) cluster.push(candidate);
-    for (const neighborId of adjacency.get(id) ?? []) {
-      if (!visited.has(neighborId) && candidateMap.has(neighborId)) {
-        dfs(neighborId, cluster);
+    const neighbors = adjacency.get(id);
+    if (neighbors) {
+      for (const neighborId of neighbors) {
+        if (!visited.has(neighborId) && candidateMap.has(neighborId)) {
+          dfs(neighborId, cluster);
+        }
       }
     }
   }

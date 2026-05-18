@@ -7,11 +7,12 @@ interface ChipProps {
   children: React.ReactNode;
   kind?: ChipKind;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-export function Chip({ children, kind = "default", className }: ChipProps) {
+export function Chip({ children, kind = "default", className, style }: ChipProps) {
   return (
-    <span className={cn("chip", `chip-${kind}`, className)}>
+    <span className={cn("chip", `chip-${kind}`, className)} style={style}>
       {children}
     </span>
   );
