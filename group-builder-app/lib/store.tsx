@@ -26,6 +26,7 @@ import {
   autoDistribute as autoDistributeImpl,
 } from "./conflict-detection";
 import type { Candidate, Connection, Group, Room, Activity, Batch, Conflict } from "@/types";
+import { enqueueSync } from "./dexie";
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -226,14 +227,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addCandidate = useCallback((candidate: Candidate) => {
     dispatch({ type: "ADD_CANDIDATE", payload: candidate });
     addActivity(`Added candidate: ${candidate.fullName}`, "candidate", "created");
+    if (!navigator.onLine) {
+      enqueueSync({ action: "create", entity: "candidate", entityId: candidate.id, payload: candidate });
+    }
   }, [addActivity]);
 
   const updateCandidate = useCallback((candidate: Candidate) => {
     dispatch({ type: "UPDATE_CANDIDATE", payload: candidate });
+    if (!navigator.onLine) {
+      enqueueSync({ action: "update", entity: "candidate", entityId: candidate.id, payload: candidate });
+    }
   }, []);
 
   const deleteCandidate = useCallback((id: string) => {
     dispatch({ type: "DELETE_CANDIDATE", payload: id });
+    if (!navigator.onLine) {
+      enqueueSync({ action: "delete", entity: "candidate", entityId: id, payload: {} });
+    }
   }, []);
 
   const importCandidates = useCallback((candidates: Candidate[]) => {
@@ -264,6 +274,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const assignToGroup = useCallback((candidateId: string, groupId: string | null) => {
     dispatch({ type: "ASSIGN_TO_GROUP", payload: { candidateId, groupId } });
+    if (!navigator.onLine) {
+      enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } });
+    }
   }, []);
 
   const autoDistribute = useCallback(() => {
@@ -300,6 +313,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const assignToRoom = useCallback((candidateId: string, roomId: string | null) => {
     dispatch({ type: "ASSIGN_TO_ROOM", payload: { candidateId, roomId } });
+    if (!navigator.onLine) {
+      enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { roomId } });
+    }
   }, []);
 
   const value: AppContextValue = {

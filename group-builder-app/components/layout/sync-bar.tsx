@@ -1,24 +1,41 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { flushSyncQueue } from "@/lib/dexie";
 
 export default function SyncBar() {
   const [online, setOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
 
+  // Read real pending count from IndexedDB on mount
   useEffect(() => {
+    async function loadPending() {
+      try {
+        const { db } = await import("@/lib/dexie");
+        if (db) setPendingCount(await db.syncQueue.count());
+      } catch {
+        // IndexedDB unavailable — ignore
+      }
+    }
+    loadPending();
+  }, []);
+
+  useEffect(() => {
+    // Set real initial state (avoids SSR mismatch showing "Online" when offline)
     setOnline(navigator.onLine);
 
-    function handleOnline() {
+    async function handleOnline() {
       setOnline(true);
       setSyncing(true);
-      // Simulate sync flush
-      setTimeout(() => {
-        setSyncing(false);
-        setPendingCount(0);
-      }, 1500);
+      try {
+        await flushSyncQueue((remaining) => setPendingCount(remaining));
+      } catch {
+        // Network flush failed — will retry on next reconnect
+      }
+      setSyncing(false);
     }
+
     function handleOffline() {
       setOnline(false);
     }
@@ -38,14 +55,19 @@ export default function SyncBar() {
           width: 7,
           height: 7,
           borderRadius: "50%",
-          background: online ? "var(--color-success)" : "var(--color-danger)",
+          background: syncing
+            ? "var(--color-warning)"
+            : online
+            ? "var(--color-success)"
+            : "var(--color-danger)",
           display: "inline-block",
           flexShrink: 0,
+          transition: "background 0.3s",
         }}
       />
       <span>
         {syncing
-          ? "Syncing…"
+          ? `Syncing${pendingCount > 0 ? ` ${pendingCount} change${pendingCount !== 1 ? "s" : ""}` : ""}…`
           : online
           ? pendingCount > 0
             ? `${pendingCount} change${pendingCount !== 1 ? "s" : ""} pending sync`
