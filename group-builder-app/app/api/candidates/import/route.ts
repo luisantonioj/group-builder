@@ -1,9 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { hmac } from "@/lib/crypto";
+import { hmac, encrypt } from "@/lib/crypto";
 import { fuzzyMatchInviter } from "@/lib/fuzzy-match";
 import type { ImportRow, ColumnMapping } from "@/types";
+
+const MAX_ROWS = 500;
+
+// Strip leading formula-injection chars and trim whitespace
+function sanitize(val: unknown): string {
+  if (val === null || val === undefined) return "";
+  return String(val).trim().replace(/^[=+\-@\t\r]+/, "");
+}
+
+// Encrypt a field value or return null if empty
+function encField(val: unknown): string | null {
+  const s = sanitize(val);
+  return s ? encrypt(s) : null;
+}
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -16,20 +30,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "rows and batchId required" }, { status: 400 });
   }
 
+  if (rows.length > MAX_ROWS) {
+    return NextResponse.json({ error: `Maximum ${MAX_ROWS} rows per import` }, { status: 400 });
+  }
+
   const existingCandidates = await prisma.candidate.findMany({ where: { batchId } });
   const results = { created: 0, skipped: 0, duplicates: [] as string[] };
 
   for (const row of rows) {
-    // Map columns using the shepherd-defined mapping
-    const fullName = String(row[mapping["fullName"] ?? "fullName"] ?? "").trim();
-    const gender = String(row[mapping["gender"] ?? "gender"] ?? "").toUpperCase();
-    const contact = String(row[mapping["contact"] ?? "contact"] ?? "").trim() || null;
+    const col = (field: string) => row[mapping[field] ?? field];
+
+    const fullName = sanitize(col("fullName"));
+    const gender = sanitize(col("gender")).toUpperCase();
+    const contact = sanitize(col("contact")) || null;
 
     if (!fullName) continue;
 
     const contactHash = contact ? hmac(contact) : null;
 
-    // Duplicate detection
     if (contactHash) {
       const existing = existingCandidates.find((c) => c.contactHash === contactHash);
       if (existing) {
@@ -39,13 +57,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Parse name
     const nameParts = fullName.split(",").map((s) => s.trim());
     const lastName = nameParts[0] ?? fullName;
     const firstName = nameParts[1] ?? "";
 
-    // Resolve inviter
-    const inviterRaw = String(row[mapping["inviterName"] ?? "inviterName"] ?? "").trim() || null;
+    const inviterRaw = sanitize(col("inviterName")) || null;
 
     try {
       const candidate = await prisma.candidate.create({
@@ -54,26 +70,25 @@ export async function POST(req: NextRequest) {
           lastName,
           firstName,
           gender: gender === "F" || gender === "FEMALE" ? "FEMALE" : "MALE",
-          age: row[mapping["age"] ?? "age"] ? Number(row[mapping["age"] ?? "age"]) : null,
-          school: String(row[mapping["school"] ?? "school"] ?? "").trim() || null,
+          age: col("age") ? Number(col("age")) || null : null,
+          school: sanitize(col("school")) || null,
           inviterName: inviterRaw,
-          howHeard: String(row[mapping["howHeard"] ?? "howHeard"] ?? "").trim() || null,
+          howHeard: sanitize(col("howHeard")) || null,
           yeBatch: batchId,
-          birthdayEnc: String(row[mapping["birthday"] ?? "birthday"] ?? "").trim() || null,
-          addressEnc: String(row[mapping["address"] ?? "address"] ?? "").trim() || null,
-          facebookEnc: String(row[mapping["facebook"] ?? "facebook"] ?? "").trim() || null,
-          contactEnc: contact,
+          birthdayEnc: encField(col("birthday")),
+          addressEnc: encField(col("address")),
+          facebookEnc: encField(col("facebook")),
+          contactEnc: contact ? encrypt(contact) : null,
           contactHash,
-          allergiesEnc: String(row[mapping["allergies"] ?? "allergies"] ?? "").trim() || null,
-          fatherNameEnc: String(row[mapping["fatherName"] ?? "fatherName"] ?? "").trim() || null,
-          fatherContactEnc: String(row[mapping["fatherContact"] ?? "fatherContact"] ?? "").trim() || null,
-          motherNameEnc: String(row[mapping["motherName"] ?? "motherName"] ?? "").trim() || null,
-          motherContactEnc: String(row[mapping["motherContact"] ?? "motherContact"] ?? "").trim() || null,
+          allergiesEnc: encField(col("allergies")),
+          fatherNameEnc: encField(col("fatherName")),
+          fatherContactEnc: encField(col("fatherContact")),
+          motherNameEnc: encField(col("motherName")),
+          motherContactEnc: encField(col("motherContact")),
           batchId,
         },
       });
 
-      // Auto-create connection from inviter name if matched
       if (inviterRaw && inviterRaw.toLowerCase() !== "n/a") {
         const match = fuzzyMatchInviter(inviterRaw, existingCandidates as unknown as Parameters<typeof fuzzyMatchInviter>[1]);
         if (match && match.score > 0.6) {
