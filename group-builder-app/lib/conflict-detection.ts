@@ -1,4 +1,5 @@
 import type { Candidate, Connection, Conflict } from "@/types";
+import { fuzzyMatchInviter } from "./fuzzy-match";
 
 // Build an adjacency map from a connection list for O(1) lookup
 export function buildAdjacencyMap(
@@ -124,6 +125,40 @@ export function findClusters(
   }
 
   return clusters.sort((a, b) => b.length - a.length);
+}
+
+// Derive AUTO connections from candidates' inviterName fields via fuzzy matching.
+// For each candidate whose inviterName fuzzy-matches another candidate, creates a
+// bidirectional AUTO connection. Deduplicates so A→B and B→A produce one entry.
+export function deriveAutoConnections(candidates: Candidate[]): Connection[] {
+  const result: Connection[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of candidates) {
+    if (!candidate.inviterName) continue;
+    const others = candidates.filter((c) => c.id !== candidate.id);
+    const match = fuzzyMatchInviter(candidate.inviterName, others, 0.4);
+    if (!match) continue;
+
+    const [a, b] = [candidate.id, match.candidate.id].sort();
+    const key = `${a}:${b}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    result.push({
+      id: `auto-${a}-${b}`,
+      fromId: candidate.id,
+      toId: match.candidate.id,
+      relationshipType: "BARKADA",
+      source: "AUTO",
+      note: `Invited by "${candidate.inviterName}"`,
+      createdAt: candidate.createdAt,
+      fromName: candidate.fullName,
+      toName: match.candidate.fullName,
+    });
+  }
+
+  return result;
 }
 
 // Auto-distribute candidates into groups, minimising conflicts

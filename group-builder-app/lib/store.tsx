@@ -24,6 +24,7 @@ import {
   detectGroupConflicts,
   detectRoomConflicts,
   autoDistribute as autoDistributeImpl,
+  deriveAutoConnections,
 } from "./conflict-detection";
 import type { Candidate, Connection, Group, Room, Activity, Batch, Conflict } from "@/types";
 import { enqueueSync } from "./dexie";
@@ -144,7 +145,7 @@ function reducer(state: AppState, action: Action): AppState {
 const initialState: AppState = {
   batch: MOCK_BATCH,
   candidates: MOCK_CANDIDATES,
-  connections: MOCK_CONNECTIONS,
+  connections: MOCK_CONNECTIONS.filter((c) => c.source === "MANUAL"),
   groups: MOCK_GROUPS,
   rooms: MOCK_ROOMS,
   activities: MOCK_ACTIVITIES,
@@ -182,9 +183,19 @@ const AppContext = createContext<AppContextValue>(null!);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
+  const autoConnections = useMemo(
+    () => deriveAutoConnections(state.candidates),
+    [state.candidates]
+  );
+
+  const allConnections = useMemo(
+    () => [...autoConnections, ...state.connections],
+    [autoConnections, state.connections]
+  );
+
   const adjacency = useMemo(
-    () => buildAdjacencyMap(state.connections),
-    [state.connections]
+    () => buildAdjacencyMap(allConnections),
+    [allConnections]
   );
 
   const groupConflicts = useMemo(() => {
@@ -320,6 +331,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value: AppContextValue = {
     ...state,
+    connections: allConnections,
     adjacency,
     groupConflicts,
     roomConflicts,

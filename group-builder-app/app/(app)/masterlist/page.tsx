@@ -7,7 +7,7 @@ import SearchInput from "@/components/ui/search-input";
 import { Chip, GenderChip, AllergyBadge } from "@/components/ui/chip";
 import Modal from "@/components/ui/modal";
 import Initials from "@/components/ui/initials";
-import type { Candidate, Gender } from "@/types";
+import type { Candidate, Connection, Gender, RelationshipType } from "@/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -104,7 +104,7 @@ interface ImportModalData {
 }
 
 export default function MasterlistPage() {
-  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, importCandidates, batch } = useApp();
+  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, importCandidates, addConnection, deleteConnection, batch } = useApp();
   const { showToast } = useToast();
 
   // Filters
@@ -621,8 +621,11 @@ export default function MasterlistPage() {
       {/* Edit / Add modal */}
       {editCandidate && (
         <CandidateModal
-          candidate={editCandidate} isNew={isAddNew} groups={groups} rooms={rooms}
+          candidate={editCandidate} isNew={isAddNew}
+          groups={groups} rooms={rooms}
+          candidates={candidates} connections={connections}
           onSave={handleSave} onDelete={handleDelete}
+          onAddConnection={addConnection} onDeleteConnection={deleteConnection}
           onClose={() => { setEditCandidate(null); setIsAddNew(false); }}
         />
       )}
@@ -864,18 +867,72 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
 
 // ─── Candidate Edit Modal ─────────────────────────────────────────────────────
 
-function CandidateModal({ candidate: initial, isNew, groups, rooms, onSave, onDelete, onClose }: {
+function CandidateModal({
+  candidate: initial, isNew, groups, rooms, candidates, connections,
+  onSave, onDelete, onClose, onAddConnection, onDeleteConnection,
+}: {
   candidate: Candidate;
   isNew: boolean;
   groups: { id: string; name: string }[];
   rooms: { id: string; name: string; gender: string }[];
+  candidates: Candidate[];
+  connections: Connection[];
   onSave: (c: Candidate) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
+  onAddConnection: (conn: Connection) => void;
+  onDeleteConnection: (id: string) => void;
 }) {
   const [form, setForm] = useState<Candidate>(initial);
-  const [tab, setTab] = useState<"details" | "assignment" | "contacts">("details");
+  const [tab, setTab] = useState<"details" | "connections" | "shepherd-notes" | "assignment" | "contacts">("details");
 
+  // ── Connection add state ─────────────────────────────────────────────────────
+  const [showAddConn, setShowAddConn] = useState(false);
+  const [connSearch, setConnSearch] = useState("");
+  const [connSelectedId, setConnSelectedId] = useState<string | null>(null);
+  const [connRelType, setConnRelType] = useState<RelationshipType>("BARKADA");
+
+  const myConnections = connections.filter(
+    (c) => c.fromId === initial.id || c.toId === initial.id
+  );
+
+  const connectedIds = new Set(
+    myConnections.map((c) => (c.fromId === initial.id ? c.toId : c.fromId))
+  );
+
+  const connSearchResults =
+    connSearch.length >= 2
+      ? candidates
+          .filter(
+            (c) =>
+              c.id !== initial.id &&
+              !connectedIds.has(c.id) &&
+              c.fullName.toLowerCase().includes(connSearch.toLowerCase())
+          )
+          .slice(0, 8)
+      : [];
+
+  function handleAddConn() {
+    if (!connSelectedId) return;
+    const target = candidates.find((c) => c.id === connSelectedId);
+    if (!target) return;
+    onAddConnection({
+      id: `manual-${Date.now()}`,
+      fromId: initial.id,
+      toId: connSelectedId,
+      relationshipType: connRelType,
+      source: "MANUAL",
+      note: null,
+      createdAt: new Date().toISOString(),
+      fromName: initial.fullName,
+      toName: target.fullName,
+    });
+    setConnSearch("");
+    setConnSelectedId(null);
+    setShowAddConn(false);
+  }
+
+  // ── Form helpers ─────────────────────────────────────────────────────────────
   function set(field: keyof Candidate, value: unknown) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
@@ -889,26 +946,54 @@ function CandidateModal({ candidate: initial, isNew, groups, rooms, onSave, onDe
 
   const genderRooms = rooms.filter((r) => r.gender === form.gender || r.gender === "MIXED");
 
+  const tabLabels: Record<typeof tab, React.ReactNode> = {
+    "details": "Details",
+    "connections": (
+      <>
+        Connections
+        {myConnections.length > 0 && (
+          <span style={{
+            marginLeft: 6, background: "var(--color-accent)", color: "#fff",
+            borderRadius: 10, fontSize: "0.7em", padding: "1px 6px", fontWeight: 600,
+          }}>
+            {myConnections.length}
+          </span>
+        )}
+      </>
+    ),
+    "shepherd-notes": "Shepherd notes",
+    "assignment": "Assignment",
+    "contacts": "Contacts",
+  };
+
   return (
-    <Modal open title={isNew ? "Add Candidate" : `Edit — ${initial.fullName}`} onClose={onClose} size="lg"
+    <Modal open title={isNew ? "Add Candidate" : initial.fullName} onClose={onClose} size="lg"
       footer={
         <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-          {!isNew && <button type="button" className="btn btn-danger" onClick={() => onDelete(form.id)}>Delete</button>}
+          {!isNew && <button type="button" className="btn btn-danger" onClick={() => onDelete(form.id)}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
+              <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M9 6V4h6v2" />
+            </svg>
+            Delete
+          </button>}
           <div style={{ display: "flex", gap: "var(--space-sm)", marginLeft: "auto" }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="submit" form="candidate-form" className="btn btn-primary">Save Changes</button>
+            <button type="submit" form="candidate-form" className="btn btn-primary">
+              ✓ Save changes
+            </button>
           </div>
         </div>
       }
     >
       <div className="tabs" style={{ marginBottom: "var(--space-lg)" }}>
-        {(["details", "assignment", "contacts"] as const).map((t) => (
+        {(["details", "connections", "shepherd-notes", "assignment", "contacts"] as const).map((t) => (
           <button key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {tabLabels[t]}
           </button>
         ))}
       </div>
       <form id="candidate-form" onSubmit={handleSubmit}>
+        {/* ── Details ─────────────────────────────────────────────────────── */}
         {tab === "details" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
             <div className="form-grid-2">
@@ -947,6 +1032,9 @@ function CandidateModal({ candidate: initial, isNew, groups, rooms, onSave, onDe
             <div className="form-group">
               <label className="form-label">Inviter Name</label>
               <input className="input" value={form.inviterName ?? ""} onChange={(e) => set("inviterName", e.target.value || null)} placeholder="Who invited them? (or leave blank)" />
+              <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 2 }}>
+                Auto-matched against existing candidates to detect connections.
+              </p>
             </div>
             <div className="form-group">
               <label className="form-label">How did they hear about YE?</label>
@@ -957,12 +1045,188 @@ function CandidateModal({ candidate: initial, isNew, groups, rooms, onSave, onDe
               <input className="input" value={form.allergies ?? ""} onChange={(e) => set("allergies", e.target.value || null)} placeholder="e.g. Nuts, shellfish (leave blank if none)" />
               {form.allergies && <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-warning)", marginTop: 2 }}>⚠ This will be flagged on the candidate card and in reports.</p>}
             </div>
-            <div className="form-group">
-              <label className="form-label">Shepherd Notes (internal)</label>
-              <textarea className="input" value={form.shepherdNotes ?? ""} onChange={(e) => set("shepherdNotes", e.target.value || null)} placeholder="Internal notes visible only to shepherds…" rows={3} style={{ resize: "vertical" }} />
+          </div>
+        )}
+
+        {/* ── Connections ─────────────────────────────────────────────────── */}
+        {tab === "connections" && (
+          <div>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-md)" }}>
+              <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)" }}>
+                {myConnections.length} known connection{myConnections.length !== 1 ? "s" : ""}.
+                {" "}Manually add another to flag conflicts during grouping.
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ whiteSpace: "nowrap", fontSize: "var(--font-size-sm)", padding: "6px 12px" }}
+                onClick={() => setShowAddConn((v) => !v)}
+              >
+                + Add connection
+              </button>
+            </div>
+
+            {/* Add connection panel */}
+            {showAddConn && (
+              <div style={{
+                background: "var(--bg-hover)", borderRadius: "var(--radius-sm)",
+                padding: "var(--space-md)", marginBottom: "var(--space-md)",
+                display: "flex", flexDirection: "column", gap: "var(--space-sm)",
+              }}>
+                <div style={{ position: "relative" }}>
+                  <input
+                    className="input"
+                    placeholder="Search candidate name…"
+                    value={connSearch}
+                    autoFocus
+                    onChange={(e) => { setConnSearch(e.target.value); setConnSelectedId(null); }}
+                  />
+                  {connSearchResults.length > 0 && (
+                    <div style={{
+                      position: "absolute", top: "calc(100% + 2px)", left: 0, right: 0,
+                      background: "var(--bg-card)", border: "1px solid var(--border-default)",
+                      borderRadius: "var(--radius-sm)", zIndex: 20,
+                      maxHeight: 200, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                    }}>
+                      {connSearchResults.map((c) => (
+                        <div
+                          key={c.id}
+                          onClick={() => { setConnSelectedId(c.id); setConnSearch(c.fullName); }}
+                          style={{
+                            padding: "var(--space-sm) var(--space-md)", cursor: "pointer",
+                            background: connSelectedId === c.id ? "var(--bg-hover)" : "transparent",
+                            display: "flex", alignItems: "center", gap: "var(--space-sm)",
+                          }}
+                        >
+                          <Initials name={c.fullName} gender={c.gender} size={28} />
+                          <div>
+                            <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 500 }}>{c.fullName}</div>
+                            {c.school && <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{c.school}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <select
+                  className="input"
+                  value={connRelType}
+                  onChange={(e) => setConnRelType(e.target.value as RelationshipType)}
+                >
+                  <option value="BARKADA">Barkada / Friends</option>
+                  <option value="CLASSMATE">Classmate</option>
+                  <option value="SIBLING">Sibling</option>
+                  <option value="FAMILY">Family</option>
+                  <option value="CHURCHMATE">Churchmate</option>
+                  <option value="OTHER">Other</option>
+                </select>
+                <div style={{ display: "flex", gap: "var(--space-sm)" }}>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    style={{ fontSize: "var(--font-size-sm)", padding: "6px 14px" }}
+                    disabled={!connSelectedId}
+                    onClick={handleAddConn}
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ fontSize: "var(--font-size-sm)", padding: "6px 14px" }}
+                    onClick={() => { setShowAddConn(false); setConnSearch(""); setConnSelectedId(null); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Connection list */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+              {myConnections.length === 0 && (
+                <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", textAlign: "center", padding: "var(--space-xl) 0" }}>
+                  No connections yet.
+                </p>
+              )}
+              {myConnections.map((conn) => {
+                const isFrom = conn.fromId === initial.id;
+                const otherId = isFrom ? conn.toId : conn.fromId;
+                const otherName = isFrom ? conn.toName : conn.fromName;
+                const other = candidates.find((c) => c.id === otherId);
+                return (
+                  <div
+                    key={conn.id}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "var(--space-sm)",
+                      padding: "var(--space-sm) var(--space-md)",
+                      background: "var(--bg-hover)", borderRadius: "var(--radius-sm)",
+                    }}
+                  >
+                    <Initials name={otherName ?? "?"} gender={other?.gender ?? "MALE"} size={28} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 500, fontSize: "var(--font-size-sm)" }}>
+                        {otherName ?? otherId}
+                      </div>
+                      {other?.school && (
+                        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+                          {other.school}
+                        </div>
+                      )}
+                      {conn.source === "AUTO" && conn.note && (
+                        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", fontStyle: "italic" }}>
+                          {conn.note}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
+                      <Chip kind="default">{conn.relationshipType.toLowerCase()}</Chip>
+                      <Chip kind={conn.source === "AUTO" ? "accent" : "default"}>
+                        {conn.source.toLowerCase()}
+                      </Chip>
+                      {conn.source === "MANUAL" && (
+                        <button
+                          type="button"
+                          title="Remove connection"
+                          onClick={() => onDeleteConnection(conn.id)}
+                          style={{
+                            background: "none", border: "none", cursor: "pointer",
+                            padding: 4, color: "var(--text-muted)", display: "flex", alignItems: "center",
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
+
+        {/* ── Shepherd notes ──────────────────────────────────────────────── */}
+        {tab === "shepherd-notes" && (
+          <div className="form-group">
+            <label className="form-label">Shepherd Notes (internal)</label>
+            <textarea
+              className="input"
+              value={form.shepherdNotes ?? ""}
+              onChange={(e) => set("shepherdNotes", e.target.value || null)}
+              placeholder="Internal notes visible only to shepherds…"
+              rows={8}
+              style={{ resize: "vertical" }}
+            />
+            <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 4 }}>
+              Notes are visible to shepherds only and will appear in reports.
+            </p>
+          </div>
+        )}
+
+        {/* ── Assignment ──────────────────────────────────────────────────── */}
         {tab === "assignment" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
             <div className="form-group">
@@ -979,11 +1243,15 @@ function CandidateModal({ candidate: initial, isNew, groups, rooms, onSave, onDe
                 {genderRooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
               </select>
               {rooms.length > genderRooms.length && (
-                <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 2 }}>Only {form.gender === "MALE" ? "male" : "female"} and mixed rooms shown.</p>
+                <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 2 }}>
+                  Only {form.gender === "MALE" ? "male" : "female"} and mixed rooms shown.
+                </p>
               )}
             </div>
           </div>
         )}
+
+        {/* ── Contacts ────────────────────────────────────────────────────── */}
         {tab === "contacts" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
             <div className="form-grid-2">
