@@ -325,7 +325,7 @@ export default function MasterlistPage() {
     };
 
     const now = new Date().toISOString();
-    const newCandidates = importModalData.rows
+    const parsed = importModalData.rows
       .map((row, i): Candidate | null => {
         const fullName = getRaw(row, "fullName");
         if (!fullName) return null;
@@ -358,14 +358,63 @@ export default function MasterlistPage() {
       })
       .filter((c): c is Candidate => c !== null);
 
+    // ── Client-side duplicate detection ────────────────────────────────────────
+    // Normalize helpers
+    const normName = (n: string) => n.toLowerCase().replace(/\s+/g, " ").trim();
+    const normContact = (c: string) => c.replace(/[\s\-().+]/g, "");
+
+    // Seed lookup sets from the existing store
+    const seenNames = new Set(candidates.map((c) => normName(c.fullName)));
+    const seenContacts = new Set(
+      candidates.filter((c) => c.contact).map((c) => normContact(c.contact!))
+    );
+
+    const freshCandidates: Candidate[] = [];
+    const skippedDupes: string[] = [];
+
+    for (const c of parsed) {
+      const nameKey = normName(c.fullName);
+      const contactKey = c.contact ? normContact(c.contact) : null;
+      const isDupe = seenNames.has(nameKey) || (contactKey !== null && seenContacts.has(contactKey));
+
+      if (isDupe) {
+        skippedDupes.push(c.fullName);
+      } else {
+        freshCandidates.push(c);
+        // Also guard against duplicates within the same batch being imported
+        seenNames.add(nameKey);
+        if (contactKey) seenContacts.add(contactKey);
+      }
+    }
+
+    // All entries already exist — exit early without touching the store
+    if (freshCandidates.length === 0) {
+      const n = skippedDupes.length;
+      showToast(
+        n > 0
+          ? `All ${n} entr${n !== 1 ? "ies" : "y"} already exist — nothing imported.`
+          : "No valid candidates found in the file.",
+        "info"
+      );
+      setImportModalData(null);
+      setImporting(false);
+      return;
+    }
+
     const sanitizedRows = importModalData.rows.map((row) => {
       const clean: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(row)) clean[k] = typeof v === "string" ? sanitizeCell(v) : v;
       return clean;
     });
 
-    importCandidates(newCandidates);
+    // Update local store with only fresh candidates
+    importCandidates(freshCandidates);
     setImportModalData(null);
+
+    const buildNote = (created: number, dupes: number) => {
+      const dupeStr = dupes > 0 ? ` · ${dupes} duplicate${dupes !== 1 ? "s" : ""} skipped` : "";
+      return `${created} candidate${created !== 1 ? "s" : ""} imported${dupeStr}`;
+    };
 
     try {
       const res = await fetch("/api/candidates/import", {
@@ -375,15 +424,14 @@ export default function MasterlistPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        const dupeNote = data.duplicates?.length
-          ? ` · ${data.duplicates.length} duplicate${data.duplicates.length !== 1 ? "s" : ""} skipped`
-          : "";
-        showToast(`${data.created} candidate${data.created !== 1 ? "s" : ""} imported${dupeNote}`, "success");
+        // Server counts are authoritative; add any client-side skips on top
+        const serverDupes = data.duplicates?.length ?? 0;
+        showToast(buildNote(data.created ?? freshCandidates.length, serverDupes + skippedDupes.length), "success");
       } else {
-        showToast(`${newCandidates.length} candidates saved locally (sync pending)`, "info");
+        showToast(`${buildNote(freshCandidates.length, skippedDupes.length)} (sync pending)`, "info");
       }
     } catch {
-      showToast(`${newCandidates.length} candidates saved locally (sync pending)`, "info");
+      showToast(`${buildNote(freshCandidates.length, skippedDupes.length)} (sync pending)`, "info");
     } finally {
       setImporting(false);
     }
