@@ -9,7 +9,38 @@ import Modal from "@/components/ui/modal";
 import Initials from "@/components/ui/initials";
 import type { Candidate, Gender } from "@/types";
 
-// ─── Import helpers (module-level, no component state) ────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+type SortConfig = { key: string; dir: "asc" | "desc" };
+
+// Extra columns: hidden by default, toggleable via Columns modal
+const EXTRA_COLUMNS: { key: keyof Candidate; label: string }[] = [
+  { key: "contact",       label: "Contact" },
+  { key: "birthday",      label: "Birthday" },
+  { key: "allergies",     label: "Allergies" },
+  { key: "howHeard",      label: "How Heard" },
+  { key: "address",       label: "Address" },
+  { key: "facebook",      label: "Facebook" },
+  { key: "fatherName",    label: "Father Name" },
+  { key: "fatherContact", label: "Father Contact" },
+  { key: "motherName",    label: "Mother Name" },
+  { key: "motherContact", label: "Mother Contact" },
+  { key: "shepherdNotes", label: "Notes" },
+];
+
+// Columns available for sorting in the Sort modal
+const FIXED_SORT_COLS = [
+  { key: "fullName",    label: "Name" },
+  { key: "gender",      label: "Gender" },
+  { key: "age",         label: "Age" },
+  { key: "school",      label: "School / Work" },
+  { key: "inviterName", label: "Inviter" },
+  { key: "connections", label: "Connections" },
+  { key: "group",       label: "Group" },
+  { key: "room",        label: "Room" },
+];
+
+// ─── Import helpers ────────────────────────────────────────────────────────────
 
 function sanitizeCell(val: unknown): string {
   if (val === null || val === undefined) return "";
@@ -17,8 +48,8 @@ function sanitizeCell(val: unknown): string {
 }
 
 const SYSTEM_FIELDS: { key: string; label: string; required?: boolean }[] = [
-  { key: "fullName",      label: "Full Name",           required: true },
-  { key: "gender",        label: "Gender",              required: true },
+  { key: "fullName",      label: "Full Name",      required: true },
+  { key: "gender",        label: "Gender",         required: true },
   { key: "age",           label: "Age" },
   { key: "birthday",      label: "Birthday" },
   { key: "contact",       label: "Contact Number" },
@@ -76,16 +107,29 @@ export default function MasterlistPage() {
   const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, importCandidates, batch } = useApp();
   const { showToast } = useToast();
 
+  // Filters
   const [search, setSearch] = useState("");
   const [genderFilter, setGenderFilter] = useState<"ALL" | "MALE" | "FEMALE">("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "GROUPED" | "UNGROUPED">("ALL");
+
+  // Edit / add
   const [editCandidate, setEditCandidate] = useState<Candidate | null>(null);
   const [isAddNew, setIsAddNew] = useState(false);
 
-  // Import state
+  // Import
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importModalData, setImportModalData] = useState<ImportModalData | null>(null);
   const [importing, setImporting] = useState(false);
+
+  // Column visibility (extra columns hidden by default)
+  const [visibleExtraColumns, setVisibleExtraColumns] = useState<string[]>([]);
+  const [columnModalOpen, setColumnModalOpen] = useState(false);
+
+  // Sort
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [sortModalOpen, setSortModalOpen] = useState(false);
+
+  // ── Derived data ─────────────────────────────────────────────────────────────
 
   const connectionCounts = useMemo(() => {
     const map = new Map<string, number>();
@@ -97,7 +141,7 @@ export default function MasterlistPage() {
   }, [connections]);
 
   const filtered = useMemo(() => {
-    return candidates.filter((c) => {
+    let list = candidates.filter((c) => {
       if (genderFilter !== "ALL" && c.gender !== genderFilter) return false;
       if (statusFilter === "GROUPED" && !c.groupId) return false;
       if (statusFilter === "UNGROUPED" && c.groupId) return false;
@@ -111,7 +155,78 @@ export default function MasterlistPage() {
       }
       return true;
     });
-  }, [candidates, genderFilter, statusFilter, search]);
+
+    if (sortConfig) {
+      list = [...list].sort((a, b) => {
+        let aVal: string | number | null | undefined;
+        let bVal: string | number | null | undefined;
+
+        if (sortConfig.key === "connections") {
+          aVal = connectionCounts.get(a.id) ?? 0;
+          bVal = connectionCounts.get(b.id) ?? 0;
+        } else if (sortConfig.key === "group") {
+          aVal = groups.find((g) => g.id === a.groupId)?.name ?? null;
+          bVal = groups.find((g) => g.id === b.groupId)?.name ?? null;
+        } else if (sortConfig.key === "room") {
+          aVal = rooms.find((r) => r.id === a.roomId)?.name ?? null;
+          bVal = rooms.find((r) => r.id === b.roomId)?.name ?? null;
+        } else {
+          aVal = (a as unknown as Record<string, unknown>)[sortConfig.key] as string | number | null;
+          bVal = (b as unknown as Record<string, unknown>)[sortConfig.key] as string | number | null;
+        }
+
+        // Nulls / empty strings go to end regardless of direction
+        const aEmpty = aVal === null || aVal === undefined || aVal === "";
+        const bEmpty = bVal === null || bVal === undefined || bVal === "";
+        if (aEmpty && bEmpty) return 0;
+        if (aEmpty) return 1;
+        if (bEmpty) return -1;
+
+        if (typeof aVal === "number" && typeof bVal === "number") {
+          return sortConfig.dir === "asc" ? aVal - bVal : bVal - aVal;
+        }
+        const cmp = String(aVal).toLowerCase().localeCompare(String(bVal).toLowerCase());
+        return sortConfig.dir === "asc" ? cmp : -cmp;
+      });
+    }
+
+    return list;
+  }, [candidates, genderFilter, statusFilter, search, sortConfig, connectionCounts, groups, rooms]);
+
+  // Visible extra column definitions in stable order
+  const activeExtraCols = useMemo(
+    () => EXTRA_COLUMNS.filter((c) => visibleExtraColumns.includes(c.key as string)),
+    [visibleExtraColumns]
+  );
+
+  // Sort columns: fixed + any active extra columns
+  const sortCols = useMemo(
+    () => [...FIXED_SORT_COLS, ...activeExtraCols.map((c) => ({ key: c.key as string, label: c.label }))],
+    [activeExtraCols]
+  );
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  function handleSort(key: string) {
+    setSortConfig((prev) =>
+      prev?.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }
+    );
+  }
+
+  // Renders a sort arrow indicator for a given column key
+  function sortArrow(key: string) {
+    if (sortConfig?.key !== key)
+      return <span style={{ marginLeft: 3, opacity: 0.2, fontSize: "0.75em" }}>↕</span>;
+    return (
+      <span style={{ marginLeft: 3, fontSize: "0.75em", color: "var(--color-accent, currentColor)" }}>
+        {sortConfig.dir === "asc" ? "↑" : "↓"}
+      </span>
+    );
+  }
+
+  const thSort: React.CSSProperties = { cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" };
+
+  // ── CRUD handlers ─────────────────────────────────────────────────────────────
 
   function handleSave(updated: Candidate) {
     if (isAddNew) {
@@ -139,60 +254,43 @@ export default function MasterlistPage() {
     setEditCandidate({
       id: `c${Date.now()}`,
       timestamp: new Date().toISOString(),
-      fullName: "",
-      lastName: "",
-      firstName: "",
-      gender: "MALE",
-      age: null,
-      school: null,
-      inviterName: null,
-      howHeard: null,
+      fullName: "", lastName: "", firstName: "",
+      gender: "MALE", age: null, school: null,
+      inviterName: null, howHeard: null,
       yeBatch: batch.name,
-      birthday: null,
-      address: null,
-      facebook: null,
-      contact: null,
-      fatherName: null,
-      fatherContact: null,
-      motherName: null,
-      motherContact: null,
-      allergies: null,
-      shepherdNotes: null,
-      groupId: null,
-      roomId: null,
+      birthday: null, address: null, facebook: null, contact: null,
+      fatherName: null, fatherContact: null,
+      motherName: null, motherContact: null,
+      allergies: null, shepherdNotes: null,
+      groupId: null, roomId: null,
       batchId: batch.id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
   }
 
-  // ── Import handlers ──────────────────────────────────────────────────────────
+  // ── Import handlers ───────────────────────────────────────────────────────────
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    e.target.value = ""; // reset so the same file can be re-selected
+    e.target.value = "";
     if (!file) return;
 
-    // Extension check
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (ext !== "xlsx" && ext !== "xls") {
       showToast("Only .xlsx and .xls files are supported.", "error");
       return;
     }
-
-    // MIME check (browsers may report application/octet-stream for xlsx — allow it)
     const allowedMimes = [
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "application/vnd.ms-excel",
       "application/octet-stream",
-      "", // some environments report empty string
+      "",
     ];
     if (file.type && !allowedMimes.includes(file.type)) {
       showToast("Invalid file type. Please upload a genuine .xlsx file.", "error");
       return;
     }
-
-    // Size check (10 MB max)
     if (file.size > 10 * 1024 * 1024) {
       showToast("File too large. Maximum size is 10 MB.", "error");
       return;
@@ -203,25 +301,13 @@ export default function MasterlistPage() {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const sheetName = workbook.SheetNames[0];
-      if (!sheetName) {
-        showToast("The file has no sheets.", "error");
-        return;
-      }
+      if (!sheetName) { showToast("The file has no sheets.", "error"); return; }
       const sheet = workbook.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-
-      if (rows.length === 0) {
-        showToast("The spreadsheet has no data rows.", "error");
-        return;
-      }
-      if (rows.length > 500) {
-        showToast("Maximum 500 rows per import. Please split the file.", "error");
-        return;
-      }
-
+      if (rows.length === 0) { showToast("The spreadsheet has no data rows.", "error"); return; }
+      if (rows.length > 500) { showToast("Maximum 500 rows per import. Please split the file.", "error"); return; }
       const headers = Object.keys(rows[0]);
-      const mapping = autoDetectMapping(headers);
-      setImportModalData({ headers, rows, mapping });
+      setImportModalData({ headers, rows, mapping: autoDetectMapping(headers) });
     } catch {
       showToast("Could not read the file. Make sure it is a valid .xlsx.", "error");
     }
@@ -238,7 +324,6 @@ export default function MasterlistPage() {
       return typeof v === "string" ? sanitizeCell(v) : v !== null && v !== undefined ? String(v) : "";
     };
 
-    // Build local Candidate objects from parsed rows
     const now = new Date().toISOString();
     const newCandidates = importModalData.rows
       .map((row, i): Candidate | null => {
@@ -252,11 +337,7 @@ export default function MasterlistPage() {
         const ageStr = getRaw(row, "age");
         return {
           id: `import-${Date.now()}-${i}`,
-          timestamp: now,
-          fullName,
-          lastName,
-          firstName,
-          gender,
+          timestamp: now, fullName, lastName, firstName, gender,
           age: ageStr ? parseInt(ageStr, 10) || null : null,
           school: getRaw(row, "school") || null,
           inviterName: getRaw(row, "inviterName") || null,
@@ -271,30 +352,21 @@ export default function MasterlistPage() {
           motherName: getRaw(row, "motherName") || null,
           motherContact: getRaw(row, "motherContact") || null,
           allergies: getRaw(row, "allergies") || null,
-          shepherdNotes: null,
-          groupId: null,
-          roomId: null,
-          batchId: batch.id,
-          createdAt: now,
-          updatedAt: now,
+          shepherdNotes: null, groupId: null, roomId: null,
+          batchId: batch.id, createdAt: now, updatedAt: now,
         };
       })
       .filter((c): c is Candidate => c !== null);
 
-    // Sanitize rows for the API payload
     const sanitizedRows = importModalData.rows.map((row) => {
       const clean: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(row)) {
-        clean[k] = typeof v === "string" ? sanitizeCell(v) : v;
-      }
+      for (const [k, v] of Object.entries(row)) clean[k] = typeof v === "string" ? sanitizeCell(v) : v;
       return clean;
     });
 
-    // Update local store immediately (optimistic / offline-first)
     importCandidates(newCandidates);
     setImportModalData(null);
 
-    // Attempt API persistence
     try {
       const res = await fetch("/api/candidates/import", {
         method: "POST",
@@ -317,16 +389,14 @@ export default function MasterlistPage() {
     }
   }
 
+  // ── Render ───────────────────────────────────────────────────────────────────
+
+  const totalCols = 9 + activeExtraCols.length;
+  const activeSortLabel = sortConfig ? sortCols.find((c) => c.key === sortConfig.key)?.label ?? sortConfig.key : null;
+
   return (
     <div>
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".xlsx,.xls"
-        style={{ display: "none" }}
-        onChange={handleFileSelect}
-      />
+      <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileSelect} />
 
       {/* Header */}
       <div className="page-header">
@@ -359,17 +429,67 @@ export default function MasterlistPage() {
       {/* Filters */}
       <div style={{ display: "flex", gap: "var(--space-sm)", marginBottom: "var(--space-lg)", alignItems: "center", flexWrap: "wrap" }}>
         <SearchInput value={search} onChange={setSearch} placeholder="Search name, school, inviter…" className="search-input" />
+
+        {/* Gender toggle */}
         <div style={{ display: "flex", gap: 2, background: "var(--bg-hover)", borderRadius: "var(--radius-sm)", padding: 3 }}>
           {(["ALL", "MALE", "FEMALE"] as const).map((v) => (
-            <button key={v} onClick={() => setGenderFilter(v)} className={`btn btn-sm ${genderFilter === v ? "btn-primary" : "btn-ghost"}`} style={{ padding: "4px 10px" }}>{v === "ALL" ? "All" : v === "MALE" ? "♂ Male" : "♀ Female"}</button>
+            <button key={v} onClick={() => setGenderFilter(v)} className={`btn btn-sm ${genderFilter === v ? "btn-primary" : "btn-ghost"}`} style={{ padding: "4px 10px" }}>
+              {v === "ALL" ? "All" : v === "MALE" ? "♂ Male" : "♀ Female"}
+            </button>
           ))}
         </div>
+
+        {/* Status toggle */}
         <div style={{ display: "flex", gap: 2, background: "var(--bg-hover)", borderRadius: "var(--radius-sm)", padding: 3 }}>
           {(["ALL", "GROUPED", "UNGROUPED"] as const).map((v) => (
-            <button key={v} onClick={() => setStatusFilter(v)} className={`btn btn-sm ${statusFilter === v ? "btn-primary" : "btn-ghost"}`} style={{ padding: "4px 10px" }}>{v.charAt(0) + v.slice(1).toLowerCase()}</button>
+            <button key={v} onClick={() => setStatusFilter(v)} className={`btn btn-sm ${statusFilter === v ? "btn-primary" : "btn-ghost"}`} style={{ padding: "4px 10px" }}>
+              {v.charAt(0) + v.slice(1).toLowerCase()}
+            </button>
           ))}
         </div>
-        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginLeft: "auto" }}>{filtered.length} shown</span>
+
+        {/* Right-side controls */}
+        <div style={{ display: "flex", gap: "var(--space-sm)", alignItems: "center", marginLeft: "auto", flexWrap: "wrap" }}>
+          {/* Active sort chip */}
+          {sortConfig && activeSortLabel && (
+            <div
+              style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--bg-hover)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "3px 8px", fontSize: "var(--font-size-xs)", cursor: "pointer" }}
+              onClick={() => setSortModalOpen(true)}
+            >
+              <span style={{ color: "var(--text-secondary)" }}>
+                {activeSortLabel} {sortConfig.dir === "asc" ? "↑" : "↓"}
+              </span>
+              <span
+                onClick={(e) => { e.stopPropagation(); setSortConfig(null); }}
+                style={{ marginLeft: 2, color: "var(--text-muted)", cursor: "pointer", lineHeight: 1, fontWeight: "bold" }}
+              >×</span>
+            </div>
+          )}
+
+          {/* Sort button */}
+          <button
+            className={`btn btn-sm ${sortConfig ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setSortModalOpen(true)}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="15" y2="12" /><line x1="3" y1="18" x2="9" y2="18" />
+            </svg>
+            Sort
+          </button>
+
+          {/* Columns button */}
+          <button
+            className={`btn btn-sm ${visibleExtraColumns.length > 0 ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setColumnModalOpen(true)}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="18" /><rect x="14" y="3" width="7" height="18" />
+            </svg>
+            Columns{visibleExtraColumns.length > 0 ? ` (${visibleExtraColumns.length})` : ""}
+          </button>
+
+          <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{filtered.length} shown</span>
+        </div>
       </div>
 
       {/* Table */}
@@ -378,14 +498,19 @@ export default function MasterlistPage() {
           <table>
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Gender</th>
-                <th>Age</th>
-                <th>School / Work</th>
-                <th>Inviter</th>
-                <th>Connections</th>
-                <th>Group</th>
-                <th>Room</th>
+                <th style={thSort} onClick={() => handleSort("fullName")}>Name{sortArrow("fullName")}</th>
+                <th style={thSort} onClick={() => handleSort("gender")}>Gender{sortArrow("gender")}</th>
+                <th style={thSort} onClick={() => handleSort("age")}>Age{sortArrow("age")}</th>
+                <th style={thSort} onClick={() => handleSort("school")}>School / Work{sortArrow("school")}</th>
+                <th style={thSort} onClick={() => handleSort("inviterName")}>Inviter{sortArrow("inviterName")}</th>
+                <th style={thSort} onClick={() => handleSort("connections")}>Connections{sortArrow("connections")}</th>
+                <th style={thSort} onClick={() => handleSort("group")}>Group{sortArrow("group")}</th>
+                <th style={thSort} onClick={() => handleSort("room")}>Room{sortArrow("room")}</th>
+                {activeExtraCols.map((col) => (
+                  <th key={col.key as string} style={thSort} onClick={() => handleSort(col.key as string)}>
+                    {col.label}{sortArrow(col.key as string)}
+                  </th>
+                ))}
                 <th></th>
               </tr>
             </thead>
@@ -410,14 +535,17 @@ export default function MasterlistPage() {
                     <td style={{ color: "var(--text-secondary)" }}>{c.school ?? "—"}</td>
                     <td style={{ color: "var(--text-secondary)", fontSize: "var(--font-size-xs)" }}>{c.inviterName ?? "—"}</td>
                     <td>
-                      {connCount > 0 ? (
-                        <Chip kind="warning">⚠ {connCount}</Chip>
-                      ) : (
-                        <span style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>0</span>
-                      )}
+                      {connCount > 0
+                        ? <Chip kind="warning">⚠ {connCount}</Chip>
+                        : <span style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>0</span>}
                     </td>
                     <td>{group ? <Chip kind="accent">{group.name}</Chip> : <span style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>—</span>}</td>
                     <td>{room ? <Chip kind="default">{room.name}</Chip> : <span style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>—</span>}</td>
+                    {activeExtraCols.map((col) => (
+                      <td key={col.key as string} style={{ color: "var(--text-secondary)", fontSize: "var(--font-size-xs)" }}>
+                        {String(c[col.key] ?? "—")}
+                      </td>
+                    ))}
                     <td onClick={(e) => e.stopPropagation()}>
                       <button className="btn btn-ghost btn-sm" onClick={() => { setIsAddNew(false); setEditCandidate(c); }}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -431,7 +559,11 @@ export default function MasterlistPage() {
                 );
               })}
               {filtered.length === 0 && (
-                <tr><td colSpan={9} style={{ textAlign: "center", padding: "var(--space-2xl)", color: "var(--text-muted)" }}>No candidates match your filters.</td></tr>
+                <tr>
+                  <td colSpan={totalCols} style={{ textAlign: "center", padding: "var(--space-2xl)", color: "var(--text-muted)" }}>
+                    No candidates match your filters.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
@@ -441,12 +573,8 @@ export default function MasterlistPage() {
       {/* Edit / Add modal */}
       {editCandidate && (
         <CandidateModal
-          candidate={editCandidate}
-          isNew={isAddNew}
-          groups={groups}
-          rooms={rooms}
-          onSave={handleSave}
-          onDelete={handleDelete}
+          candidate={editCandidate} isNew={isAddNew} groups={groups} rooms={rooms}
+          onSave={handleSave} onDelete={handleDelete}
           onClose={() => { setEditCandidate(null); setIsAddNew(false); }}
         />
       )}
@@ -454,15 +582,146 @@ export default function MasterlistPage() {
       {/* Import column-mapping modal */}
       {importModalData && (
         <ImportModal
-          headers={importModalData.headers}
-          rows={importModalData.rows}
-          initialMapping={importModalData.mapping}
-          importing={importing}
-          onClose={() => setImportModalData(null)}
-          onConfirm={handleImportConfirm}
+          headers={importModalData.headers} rows={importModalData.rows}
+          initialMapping={importModalData.mapping} importing={importing}
+          onClose={() => setImportModalData(null)} onConfirm={handleImportConfirm}
+        />
+      )}
+
+      {/* Column visibility modal */}
+      {columnModalOpen && (
+        <ColumnModal
+          visible={visibleExtraColumns}
+          onApply={(cols) => setVisibleExtraColumns(cols)}
+          onClose={() => setColumnModalOpen(false)}
+        />
+      )}
+
+      {/* Sort modal */}
+      {sortModalOpen && (
+        <SortModal
+          config={sortConfig}
+          columns={sortCols}
+          onApply={(cfg) => setSortConfig(cfg)}
+          onClear={() => setSortConfig(null)}
+          onClose={() => setSortModalOpen(false)}
         />
       )}
     </div>
+  );
+}
+
+// ─── Column Visibility Modal ──────────────────────────────────────────────────
+
+function ColumnModal({ visible, onApply, onClose }: {
+  visible: string[];
+  onApply: (cols: string[]) => void;
+  onClose: () => void;
+}) {
+  const [local, setLocal] = useState<string[]>(visible);
+
+  function toggle(key: string) {
+    setLocal((prev) => prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]);
+  }
+
+  return (
+    <Modal
+      open
+      title="Visible Columns"
+      onClose={onClose}
+      size="sm"
+      footer={
+        <div style={{ display: "flex", gap: "var(--space-sm)", marginLeft: "auto" }}>
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={() => { onApply(local); onClose(); }}>Apply</button>
+        </div>
+      }
+    >
+      <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
+        Fixed columns (Name, Gender, Age, School, Inviter, Connections, Group, Room) are always shown.
+        Toggle additional columns below.
+      </p>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+        {EXTRA_COLUMNS.map(({ key, label }) => (
+          <label
+            key={key as string}
+            style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer", fontSize: "var(--font-size-sm)", padding: "var(--space-xs) 0" }}
+          >
+            <input
+              type="checkbox"
+              checked={local.includes(key as string)}
+              onChange={() => toggle(key as string)}
+              style={{ cursor: "pointer" }}
+            />
+            {label}
+          </label>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+// ─── Sort Modal ───────────────────────────────────────────────────────────────
+
+function SortModal({ config, columns, onApply, onClear, onClose }: {
+  config: SortConfig | null;
+  columns: { key: string; label: string }[];
+  onApply: (cfg: SortConfig) => void;
+  onClear: () => void;
+  onClose: () => void;
+}) {
+  const [key, setKey] = useState(config?.key ?? columns[0]?.key ?? "fullName");
+  const [dir, setDir] = useState<"asc" | "desc">(config?.dir ?? "asc");
+
+  return (
+    <Modal
+      open
+      title="Sort"
+      onClose={onClose}
+      size="sm"
+      footer={
+        <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => { onClear(); onClose(); }}
+          >
+            Clear sort
+          </button>
+          <div style={{ display: "flex", gap: "var(--space-sm)" }}>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-primary" onClick={() => { onApply({ key, dir }); onClose(); }}>Apply</button>
+          </div>
+        </div>
+      }
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+        <div className="form-group">
+          <label className="form-label">Sort by</label>
+          <select className="input" value={key} onChange={(e) => setKey(e.target.value)}>
+            {columns.map((c) => (
+              <option key={c.key} value={c.key}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Direction</label>
+          <div style={{ display: "flex", gap: 2, background: "var(--bg-hover)", borderRadius: "var(--radius-sm)", padding: 3 }}>
+            {(["asc", "desc"] as const).map((d) => (
+              <button
+                key={d}
+                type="button"
+                className={`btn btn-sm ${dir === d ? "btn-primary" : "btn-ghost"}`}
+                style={{ padding: "4px 16px" }}
+                onClick={() => setDir(d)}
+              >
+                {d === "asc" ? "↑ Ascending" : "↓ Descending"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -495,9 +754,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
             {rows.length} row{rows.length !== 1 ? "s" : ""} detected
           </span>
           <div style={{ display: "flex", gap: "var(--space-sm)" }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={importing}>
-              Cancel
-            </button>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={importing}>Cancel</button>
             <button
               type="button"
               className="btn btn-primary"
@@ -513,31 +770,19 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
       <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-lg)" }}>
         Match each system field to the corresponding column in your spreadsheet. Fields marked <span style={{ color: "var(--color-danger)" }}>*</span> are required.
       </p>
-
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
         {SYSTEM_FIELDS.map(({ key, label, required }) => (
           <div key={key} style={{ display: "grid", gridTemplateColumns: "160px 1fr", alignItems: "center", gap: "var(--space-md)" }}>
-            <label style={{
-              fontSize: "var(--font-size-sm)",
-              color: required ? "var(--text-primary)" : "var(--text-secondary)",
-              fontWeight: required ? "var(--font-weight-semibold)" : undefined,
-            }}>
+            <label style={{ fontSize: "var(--font-size-sm)", color: required ? "var(--text-primary)" : "var(--text-secondary)", fontWeight: required ? "var(--font-weight-semibold)" : undefined }}>
               {label}{required && <span style={{ color: "var(--color-danger)", marginLeft: 2 }}>*</span>}
             </label>
-            <select
-              className="input"
-              value={mapping[key] ?? ""}
-              onChange={(e) => setField(key, e.target.value)}
-              style={{ fontSize: "var(--font-size-sm)" }}
-            >
+            <select className="input" value={mapping[key] ?? ""} onChange={(e) => setField(key, e.target.value)} style={{ fontSize: "var(--font-size-sm)" }}>
               <option value="">— Skip —</option>
               {headers.map((h) => <option key={h} value={h}>{h}</option>)}
             </select>
           </div>
         ))}
       </div>
-
-      {/* Data preview */}
       <div style={{ marginTop: "var(--space-xl)" }}>
         <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginBottom: "var(--space-sm)" }}>
           Preview — first 3 rows
@@ -547,9 +792,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
             <thead>
               <tr>
                 {headers.map((h) => (
-                  <th key={h} style={{ padding: "2px 8px", textAlign: "left", color: "var(--text-muted)", borderBottom: "1px solid var(--border-subtle)", whiteSpace: "nowrap" }}>
-                    {h}
-                  </th>
+                  <th key={h} style={{ padding: "2px 8px", textAlign: "left", color: "var(--text-muted)", borderBottom: "1px solid var(--border-subtle)", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -593,8 +836,7 @@ function CandidateModal({ candidate: initial, isNew, groups, rooms, onSave, onDe
     e.preventDefault();
     const lastName = form.lastName.trim();
     const firstName = form.firstName.trim();
-    const fullName = `${lastName}, ${firstName}`;
-    onSave({ ...form, fullName, updatedAt: new Date().toISOString() });
+    onSave({ ...form, fullName: `${lastName}, ${firstName}`, updatedAt: new Date().toISOString() });
   }
 
   const genderRooms = rooms.filter((r) => r.gender === form.gender || r.gender === "MIXED");
@@ -618,7 +860,6 @@ function CandidateModal({ candidate: initial, isNew, groups, rooms, onSave, onDe
           </button>
         ))}
       </div>
-
       <form id="candidate-form" onSubmit={handleSubmit}>
         {tab === "details" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
@@ -666,9 +907,7 @@ function CandidateModal({ candidate: initial, isNew, groups, rooms, onSave, onDe
             <div className="form-group">
               <label className="form-label">Food Allergies / Dietary Needs</label>
               <input className="input" value={form.allergies ?? ""} onChange={(e) => set("allergies", e.target.value || null)} placeholder="e.g. Nuts, shellfish (leave blank if none)" />
-              {form.allergies && (
-                <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-warning)", marginTop: 2 }}>⚠ This will be flagged on the candidate card and in reports.</p>
-              )}
+              {form.allergies && <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-warning)", marginTop: 2 }}>⚠ This will be flagged on the candidate card and in reports.</p>}
             </div>
             <div className="form-group">
               <label className="form-label">Shepherd Notes (internal)</label>
@@ -676,7 +915,6 @@ function CandidateModal({ candidate: initial, isNew, groups, rooms, onSave, onDe
             </div>
           </div>
         )}
-
         {tab === "assignment" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
             <div className="form-group">
@@ -698,7 +936,6 @@ function CandidateModal({ candidate: initial, isNew, groups, rooms, onSave, onDe
             </div>
           </div>
         )}
-
         {tab === "contacts" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
             <div className="form-grid-2">
