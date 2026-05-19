@@ -37,6 +37,23 @@ body {
   min-height: calc(100vh - var(--topbar-height));
 }
 
+/* Main content wrapper — margin tracks sidebar width via CSS var */
+.main-wrapper {
+  margin-left: var(--current-sidebar-width, var(--sidebar-width));
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  transition: margin-left var(--transition-normal);
+}
+
+/* Mobile overlay */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 49;
+}
+
 /* ─── Sidebar ────────────────────────────────────────────────────────────────── */
 .sidebar {
   background-color: var(--bg-sidebar);
@@ -47,9 +64,64 @@ body {
   left: 0;
   height: 100vh;
   overflow-y: auto;
+  overflow-x: hidden;
   z-index: 50;
   display: flex;
   flex-direction: column;
+  transition: width var(--transition-normal);
+}
+
+/* Collapsed (icon-only) */
+.sidebar.collapsed {
+  width: var(--sidebar-icon-width);
+}
+
+/* Collapse toggle button */
+.sidebar-collapse-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: var(--space-xs) var(--space-sm);
+  padding: 5px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-xs);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.sidebar-collapse-btn:hover {
+  background: rgba(255,255,255,0.09);
+  color: var(--text-sidebar-active);
+}
+.sidebar.collapsed .sidebar-collapse-btn {
+  justify-content: center;
+  padding: 6px;
+}
+
+/* Icon-only nav links */
+.sidebar-link.sidebar-link-icon {
+  justify-content: center;
+  padding: 10px;
+}
+
+/* Mobile: off-canvas drawer */
+@media (max-width: 767px) {
+  .sidebar {
+    transform: translateX(-100%);
+    width: var(--sidebar-width) !important;
+    transition: transform var(--transition-normal);
+    box-shadow: none;
+  }
+  .sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: var(--shadow-lg);
+  }
+  .sidebar-collapse-btn {
+    display: none;
+  }
 }
 
 .sidebar-logo {
@@ -416,7 +488,7 @@ tbody td {
 .sync-bar {
   position: fixed;
   bottom: 0;
-  left: var(--sidebar-width);
+  left: var(--current-sidebar-width, var(--sidebar-width));
   right: 0;
   height: 28px;
   background-color: var(--bg-card);
@@ -428,6 +500,68 @@ tbody td {
   font-size: var(--font-size-xs);
   color: var(--text-muted);
   z-index: 30;
+  transition: left var(--transition-normal);
+}
+
+/* ─── Topbar Hamburger ───────────────────────────────────────────────────────── */
+.topbar-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: background var(--transition-fast);
+}
+.topbar-menu-btn:hover {
+  background: var(--bg-hover);
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  :root {
+    --current-sidebar-width: 0px;
+  }
+
+  .topbar-menu-btn {
+    display: flex;
+  }
+
+  .topbar-batch-info {
+    display: none;
+  }
+
+  .topbar-user-name {
+    display: none;
+  }
+
+  .app-main {
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
+
+  .form-grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .card-head {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .app-main {
+    padding: var(--space-lg);
+  }
 }
 
 /* ─── Drag & Drop ────────────────────────────────────────────────────────────── */

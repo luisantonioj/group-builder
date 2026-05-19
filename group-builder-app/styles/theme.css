@@ -87,6 +87,8 @@
 
   /* Sidebar */
   --sidebar-width: 244px;
+  --sidebar-icon-width: 64px;
+  --current-sidebar-width: var(--sidebar-width);
   --topbar-height: 56px;
 
   /* Transitions */

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSidebarState } from "@/lib/sidebar-state";
 
 interface TopbarProps {
   user: { name: string; email: string; role: string };
@@ -40,7 +41,6 @@ function ThemeToggle() {
       }}
     >
       {dark ? (
-        // Sun icon
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="5" />
           <line x1="12" y1="1" x2="12" y2="3" />
@@ -53,7 +53,6 @@ function ThemeToggle() {
           <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
         </svg>
       ) : (
-        // Moon icon
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
         </svg>
@@ -63,10 +62,25 @@ function ThemeToggle() {
 }
 
 export default function Topbar({ user }: TopbarProps) {
+  const { openMobile } = useSidebarState();
+
   return (
     <header className="topbar">
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-        <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
+        {/* Hamburger — visible on mobile only via CSS */}
+        <button
+          className="topbar-menu-btn"
+          onClick={openMobile}
+          aria-label="Open navigation menu"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+
+        <span className="topbar-batch-info" style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
           YE #19 · Batch active
         </span>
         <span
@@ -117,7 +131,7 @@ export default function Topbar({ user }: TopbarProps) {
           >
             {user.name.charAt(0).toUpperCase()}
           </div>
-          <span style={{ color: "var(--text-primary)", fontWeight: "var(--font-weight-medium)" }}>
+          <span className="topbar-user-name" style={{ color: "var(--text-primary)", fontWeight: "var(--font-weight-medium)" }}>
             {user.name}
           </span>
         </div>
