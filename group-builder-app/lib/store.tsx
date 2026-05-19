@@ -55,7 +55,8 @@ type Action =
   | { type: "UPDATE_ROOM"; payload: Room }
   | { type: "ASSIGN_TO_ROOM"; payload: { candidateId: string; roomId: string | null } }
   | { type: "ADD_ACTIVITY"; payload: Activity }
-  | { type: "LOCK_GROUP"; payload: { groupId: string; locked: boolean } };
+  | { type: "LOCK_GROUP"; payload: { groupId: string; locked: boolean } }
+  | { type: "REORDER_GROUPS"; payload: string[] };
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -137,6 +138,11 @@ function reducer(state: AppState, action: Action): AppState {
           g.id === action.payload.groupId ? { ...g, isLocked: action.payload.locked } : g
         ),
       };
+    case "REORDER_GROUPS": {
+      const order = action.payload;
+      const sorted = [...state.groups].sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+      return { ...state, groups: sorted };
+    }
     default:
       return state;
   }
@@ -173,6 +179,7 @@ interface AppContextValue extends AppState {
   autoDistribute: () => void;
   clearAllGroups: () => void;
   lockGroup: (groupId: string, locked: boolean) => void;
+  reorderGroups: (groupIds: string[]) => void;
   addRoom: (room: Room) => void;
   updateRoom: (room: Room) => void;
   assignToRoom: (candidateId: string, roomId: string | null) => void;
@@ -314,6 +321,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: "LOCK_GROUP", payload: { groupId, locked } });
   }, []);
 
+  const reorderGroups = useCallback((groupIds: string[]) => {
+    dispatch({ type: "REORDER_GROUPS", payload: groupIds });
+  }, []);
+
   const addRoom = useCallback((room: Room) => {
     dispatch({ type: "ADD_ROOM", payload: room });
   }, []);
@@ -349,6 +360,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     autoDistribute,
     clearAllGroups,
     lockGroup,
+    reorderGroups,
     addRoom,
     updateRoom,
     assignToRoom,

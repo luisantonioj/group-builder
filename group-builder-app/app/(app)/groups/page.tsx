@@ -15,7 +15,15 @@ import {
   useDraggable,
   useDroppable,
 } from "@dnd-kit/core";
-import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  rectSortingStrategy,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useApp } from "@/lib/store";
 import { useToast } from "@/components/ui/toast";
 import SearchInput from "@/components/ui/search-input";
@@ -25,7 +33,7 @@ import Modal from "@/components/ui/modal";
 import type { Candidate, Group } from "@/types";
 
 export default function GroupsPage() {
-  const { candidates, groups, adjacency, groupConflicts, assignToGroup, autoDistribute, clearAllGroups, addGroup, lockGroup, updateGroup } = useApp();
+  const { candidates, groups, adjacency, groupConflicts, assignToGroup, autoDistribute, clearAllGroups, addGroup, deleteGroup, updateGroup, lockGroup, reorderGroups } = useApp();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -33,12 +41,19 @@ export default function GroupsPage() {
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [overGroupId, setOverGroupId] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
-  const [newGroupCount, setNewGroupCount] = useState(4);
-  const [newGroupPrefix, setNewGroupPrefix] = useState("Kordero");
+  const [keepExisting, setKeepExisting] = useState<boolean | null>(null);
+  const [activeDragIsGroup, setActiveDragIsGroup] = useState(false);
+  const [groupCountInput, setGroupCountInput] = useState("4");
+  const [nameEntries, setNameEntries] = useState<{ id: string; name: string }[]>(
+    () => Array.from({ length: 4 }, (_, i) => ({ id: `ne-init-${i}`, name: "" }))
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+  const modalSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
   const unassigned = useMemo(
@@ -80,10 +95,13 @@ export default function GroupsPage() {
   );
 
   function onDragStart(e: DragStartEvent) {
+    const isGroup = e.active.data.current?.type === "group";
     setActiveDragId(String(e.active.id));
+    setActiveDragIsGroup(isGroup);
   }
 
   function onDragOver(e: DragOverEvent) {
+    if (e.active.data.current?.type === "group") return;
     const overId = e.over?.id;
     if (overId && groups.find((g) => g.id === overId)) {
       setOverGroupId(String(overId));
@@ -95,11 +113,33 @@ export default function GroupsPage() {
   function onDragEnd(e: DragEndEvent) {
     const { active, over } = e;
     setActiveDragId(null);
+    setActiveDragIsGroup(false);
     setOverGroupId(null);
 
+    const dragType = active.data.current?.type as string | undefined;
+
+    // ── Group reorder ──────────────────────────────────────────────────────────
+    if (dragType === "group") {
+      if (!over || active.id === over.id || over.id === "pool") return;
+      const oldIdx = groups.findIndex((g) => g.id === active.id);
+      const newIdx = groups.findIndex((g) => g.id === over.id);
+      if (oldIdx === -1 || newIdx === -1) return;
+      const reordered = arrayMove([...groups], oldIdx, newIdx);
+      reorderGroups(reordered.map((g) => g.id));
+      // Auto-renumber groups whose name ends in a number
+      reordered.forEach((g, idx) => {
+        const match = g.name.match(/^(.*?)\s+(\d+)$/);
+        if (match) {
+          const newName = `${match[1]} ${idx + 1}`;
+          if (newName !== g.name) updateGroup({ ...g, name: newName });
+        }
+      });
+      return;
+    }
+
+    // ── Candidate assignment ───────────────────────────────────────────────────
     const candidateId = String(active.id);
 
-    // Dropped outside all zones or on the pool → return to pool
     if (!over || over.id === "pool") {
       assignToGroup(candidateId, null);
       return;
@@ -112,7 +152,6 @@ export default function GroupsPage() {
     const cand = candidates.find((c) => c.id === candidateId);
     if (!cand) return;
 
-    // Already in this group — no-op
     if (cand.groupId === targetGroup.id) return;
 
     if (targetGroup.isLocked) {
@@ -146,11 +185,41 @@ export default function GroupsPage() {
     }
   }
 
+  function handleOpenSetup() {
+    setKeepExisting(groups.length === 0 ? true : null);
+    const n = parseInt(groupCountInput, 10) || 4;
+    setGroupCountInput(String(n));
+    setNameEntries(Array.from({ length: n }, (_, i) => ({ id: `ne-${Date.now()}-${i}`, name: "" })));
+    setSetupOpen(true);
+  }
+
+  function handleCountChange(raw: string) {
+    setGroupCountInput(raw);
+    const n = parseInt(raw, 10);
+    if (isNaN(n) || n < 1 || n > 20) return; // let user type freely; only update entries for valid numbers
+    setNameEntries((prev) => {
+      if (n > prev.length) {
+        return [
+          ...prev,
+          ...Array.from({ length: n - prev.length }, (_, i) => ({
+            id: `ne-${Date.now()}-${prev.length + i}`,
+            name: "",
+          })),
+        ];
+      }
+      return prev.slice(0, n);
+    });
+  }
+
   function handleSetupGroups() {
-    for (let i = 1; i <= newGroupCount; i++) {
+    if (keepExisting === false) {
+      groups.forEach((g) => deleteGroup(g.id));
+    }
+    const now = Date.now();
+    nameEntries.forEach((entry, i) => {
       addGroup({
-        id: `g${Date.now()}-${i}`,
-        name: `${newGroupPrefix} ${i}`,
+        id: `g${now}-${i}`,
+        name: entry.name.trim() || `Group ${i + 1}`,
         label: null,
         capacity: 12,
         isLocked: false,
@@ -158,9 +227,9 @@ export default function GroupsPage() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
-    }
+    });
     setSetupOpen(false);
-    showToast(`Created ${newGroupCount} groups`, "success");
+    showToast(`Created ${nameEntries.length} groups`, "success");
   }
 
   const totalAssigned = candidates.filter((c) => c.groupId).length;
@@ -178,7 +247,7 @@ export default function GroupsPage() {
           <div style={{ display: "flex", gap: "var(--space-sm)" }}>
             <button className="btn btn-secondary" onClick={handleClearAll}>Clear All</button>
             <button className="btn btn-secondary" onClick={handleAutoDistribute}>✨ Distribute Evenly</button>
-            <button className="btn btn-secondary" onClick={() => setSetupOpen(true)}>Configure Groups</button>
+            <button className="btn btn-secondary" onClick={handleOpenSetup}>Configure Groups</button>
           </div>
         </div>
 
@@ -229,37 +298,48 @@ export default function GroupsPage() {
             {groups.length === 0 ? (
               <div className="card" style={{ padding: "var(--space-2xl)", textAlign: "center" }}>
                 <div style={{ color: "var(--text-muted)", marginBottom: "var(--space-lg)" }}>No groups set up yet.</div>
-                <button className="btn btn-primary" onClick={() => setSetupOpen(true)}>Set Up Groups</button>
+                <button className="btn btn-primary" onClick={handleOpenSetup}>Set Up Groups</button>
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "var(--space-lg)" }}>
-                {groups.map((group) => {
-                  const members = groupedCandidates.get(group.id) ?? [];
-                  const conflicts = conflictPairsByGroup.get(group.id) ?? new Set();
-                  const isFull = members.length >= group.capacity;
-                  const isOver = overGroupId === group.id;
-                  return (
-                    <GroupDropZone
-                      key={group.id}
-                      group={group}
-                      members={members}
-                      conflictIds={conflicts}
-                      isFull={isFull}
-                      isOver={isOver}
-                      onRemove={(cid) => assignToGroup(cid, null)}
-                      onLock={(locked) => lockGroup(group.id, locked)}
-                      onRename={(name) => updateGroup({ ...group, name })}
-                    />
-                  );
-                })}
-              </div>
+              <SortableContext items={groups.map((g) => g.id)} strategy={rectSortingStrategy}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "var(--space-lg)" }}>
+                  {groups.map((group) => {
+                    const members = groupedCandidates.get(group.id) ?? [];
+                    const conflicts = conflictPairsByGroup.get(group.id) ?? new Set();
+                    const isFull = members.length >= group.capacity;
+                    const isOver = overGroupId === group.id;
+                    return (
+                      <SortableGroupCard
+                        key={group.id}
+                        group={group}
+                        members={members}
+                        conflictIds={conflicts}
+                        isFull={isFull}
+                        isOver={isOver}
+                        onRemove={(cid) => assignToGroup(cid, null)}
+                        onLock={(locked) => lockGroup(group.id, locked)}
+                        onRename={(name) => updateGroup({ ...group, name })}
+                      />
+                    );
+                  })}
+                </div>
+              </SortableContext>
             )}
           </div>
         </div>
       </div>
 
       <DragOverlay>
-        {activeDragCandidate && (
+        {activeDragIsGroup && activeDragId && (() => {
+          const g = groups.find((gr) => gr.id === activeDragId);
+          if (!g) return null;
+          return (
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--color-primary)", borderRadius: "var(--radius-lg)", padding: "10px var(--space-lg)", boxShadow: "var(--shadow-lg)", fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-semibold)", opacity: 0.9, cursor: "grabbing" }}>
+              {g.name}
+            </div>
+          );
+        })()}
+        {!activeDragIsGroup && activeDragCandidate && (
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--color-primary)", borderRadius: "var(--radius-md)", padding: "8px 12px", boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: "var(--space-sm)", fontSize: "var(--font-size-sm)", width: 220, opacity: 0.95 }}>
             <Initials name={activeDragCandidate.fullName} gender={activeDragCandidate.gender} size={28} />
             <span style={{ fontWeight: "var(--font-weight-semibold)" }}>{activeDragCandidate.fullName}</span>
@@ -267,25 +347,96 @@ export default function GroupsPage() {
         )}
       </DragOverlay>
 
-      <Modal open={setupOpen} title="Configure Groups" onClose={() => setSetupOpen(false)}
+      <Modal
+        open={setupOpen}
+        title="Configure Groups"
+        onClose={() => setSetupOpen(false)}
         footer={
-          <><button className="btn btn-secondary" onClick={() => setSetupOpen(false)}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSetupGroups}>Create Groups</button></>
+          keepExisting === null ? (
+            <button className="btn btn-secondary" onClick={() => setSetupOpen(false)}>Cancel</button>
+          ) : (
+            <>
+              <button className="btn btn-secondary" onClick={() => setSetupOpen(false)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSetupGroups}>Create Groups</button>
+            </>
+          )
         }
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
-          <div className="form-group">
-            <label className="form-label">Number of Groups</label>
-            <input className="input" type="number" min={1} max={20} value={newGroupCount} onChange={(e) => setNewGroupCount(Number(e.target.value))} />
+        {keepExisting === null ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+            <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", margin: 0 }}>
+              You already have <strong>{groups.length}</strong> group{groups.length !== 1 ? "s" : ""}. What would you like to do?
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+              <button
+                className="btn btn-secondary"
+                style={{ justifyContent: "flex-start", textAlign: "left" }}
+                onClick={() => setKeepExisting(true)}
+              >
+                Keep existing groups and add new ones
+              </button>
+              <button
+                className="btn btn-secondary"
+                style={{ justifyContent: "flex-start", textAlign: "left", color: "var(--color-danger, #e74c3c)" }}
+                onClick={() => setKeepExisting(false)}
+              >
+                Delete all existing groups and start fresh
+              </button>
+            </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">Group Name Prefix</label>
-            <input className="input" value={newGroupPrefix} onChange={(e) => setNewGroupPrefix(e.target.value)} placeholder="e.g. Kordero, Group, Team" />
-            <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
-              Will create: {newGroupPrefix} 1, {newGroupPrefix} 2, …
-            </span>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+            {keepExisting === false && (
+              <div style={{ background: "var(--color-conflict-bg)", border: "1px solid var(--color-conflict-border)", borderRadius: "var(--radius-md)", padding: "8px var(--space-md)", fontSize: "var(--font-size-xs)", color: "var(--color-conflict-text)" }}>
+                All {groups.length} existing groups will be deleted.
+              </div>
+            )}
+            <div className="form-group">
+              <label className="form-label">Number of Groups</label>
+              <input
+                className="input"
+                type="number"
+                min={1}
+                max={20}
+                value={groupCountInput}
+                onChange={(e) => handleCountChange(e.target.value)}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Group Names</label>
+              <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", margin: "0 0 var(--space-sm)" }}>
+                Each group has a unique name. Drag ⠿ to reorder sequence.
+              </p>
+              <DndContext
+                sensors={modalSensors}
+                collisionDetection={pointerWithin}
+                onDragEnd={(e) => {
+                  const { active, over } = e;
+                  if (!over || active.id === over.id) return;
+                  const oldIdx = nameEntries.findIndex((n) => n.id === active.id);
+                  const newIdx = nameEntries.findIndex((n) => n.id === over.id);
+                  if (oldIdx !== -1 && newIdx !== -1) {
+                    setNameEntries((prev) => arrayMove(prev, oldIdx, newIdx));
+                  }
+                }}
+              >
+                <SortableContext items={nameEntries.map((n) => n.id)} strategy={verticalListSortingStrategy}>
+                  {nameEntries.map((entry, i) => (
+                    <SortableNameInput
+                      key={entry.id}
+                      id={entry.id}
+                      value={entry.name}
+                      index={i}
+                      onChange={(v) =>
+                        setNameEntries((prev) => prev.map((n) => (n.id === entry.id ? { ...n, name: v } : n)))
+                      }
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+            </div>
           </div>
-        </div>
+        )}
       </Modal>
     </DndContext>
   );
@@ -392,9 +543,57 @@ function DraggableMember({ candidate: m, isConflict, isLocked, onRemove }: {
   );
 }
 
-// ─── Group Drop Zone ──────────────────────────────────────────────────────────
+// ─── Sortable Name Input (Configure Groups modal) ────────────────────────────
 
-function GroupDropZone({ group, members, conflictIds, isFull, isOver, onRemove, onLock, onRename }: {
+function SortableNameInput({ id, value, index, onChange }: {
+  id: string;
+  value: string;
+  index: number;
+  onChange: (v: string) => void;
+}) {
+  const { setNodeRef, setActivatorNodeRef, attributes, listeners, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-sm)",
+        marginBottom: "var(--space-sm)",
+        transform: CSS.Transform.toString(transform),
+        transition: transition ?? undefined,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+    >
+      <button
+        ref={setActivatorNodeRef}
+        {...listeners}
+        {...attributes}
+        type="button"
+        title="Drag to reorder"
+        style={{ background: "none", border: "none", cursor: "grab", color: "var(--text-muted)", padding: "4px", display: "flex", alignItems: "center", flexShrink: 0 }}
+      >
+        <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
+          <circle cx="3" cy="2" r="1.2"/><circle cx="9" cy="2" r="1.2"/>
+          <circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/>
+          <circle cx="3" cy="12" r="1.2"/><circle cx="9" cy="12" r="1.2"/>
+        </svg>
+      </button>
+      <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", minWidth: 20, textAlign: "right", flexShrink: 0 }}>{index + 1}.</span>
+      <input
+        className="input"
+        style={{ flex: 1 }}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={`Group ${index + 1}`}
+      />
+    </div>
+  );
+}
+
+// ─── Sortable Group Card ──────────────────────────────────────────────────────
+
+function SortableGroupCard({ group, members, conflictIds, isFull, isOver, onRemove, onLock, onRename }: {
   group: Group;
   members: Candidate[];
   conflictIds: Set<string>;
@@ -404,7 +603,16 @@ function GroupDropZone({ group, members, conflictIds, isFull, isOver, onRemove, 
   onLock: (locked: boolean) => void;
   onRename: (name: string) => void;
 }) {
-  const { setNodeRef } = useDroppable({ id: group.id });
+  const {
+    setNodeRef,
+    setActivatorNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: group.id, data: { type: "group" } });
+
   const hasConflicts = conflictIds.size > 0;
   const males = members.filter((m) => m.gender === "MALE").length;
   const females = members.filter((m) => m.gender === "FEMALE").length;
@@ -418,13 +626,30 @@ function GroupDropZone({ group, members, conflictIds, isFull, isOver, onRemove, 
         border: `2px solid ${hasConflicts ? "var(--color-conflict-border)" : isOver ? "var(--color-primary)" : "var(--border-color)"}`,
         borderRadius: "var(--radius-lg)",
         overflow: "hidden",
-        transition: "border-color 0.15s, box-shadow 0.15s",
+        transition: `border-color 0.15s, box-shadow 0.15s, ${transition ?? ""}`,
         boxShadow: isOver ? "0 0 0 4px rgba(46,134,193,0.15)" : "var(--shadow-sm)",
+        transform: CSS.Transform.toString(transform),
+        opacity: isDragging ? 0.45 : 1,
       }}
     >
       {/* Header */}
       <div style={{ padding: "12px var(--space-lg)", borderBottom: `1px solid var(--border-color)`, display: "flex", alignItems: "center", justifyContent: "space-between", background: hasConflicts ? "var(--color-conflict-bg)" : "var(--bg-hover)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+          {/* Grip handle — drag groups to reorder */}
+          <button
+            ref={setActivatorNodeRef}
+            {...listeners}
+            {...attributes}
+            type="button"
+            title="Drag to reorder"
+            style={{ background: "none", border: "none", cursor: "grab", color: "var(--text-muted)", padding: "2px 4px", display: "flex", alignItems: "center", flexShrink: 0 }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+              <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+              <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+            </svg>
+          </button>
           <div style={{ width: 26, height: 26, borderRadius: "var(--radius-sm)", background: "var(--color-primary)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-bold)" }}>
             {group.name.charAt(group.name.length - 1)}
           </div>
