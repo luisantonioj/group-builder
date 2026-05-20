@@ -33,7 +33,7 @@ import Modal from "@/components/ui/modal";
 import type { Candidate, Group } from "@/types";
 
 export default function GroupsPage() {
-  const { candidates, groups, adjacency, groupConflicts, assignToGroup, autoDistribute, clearAllGroups, addGroup, deleteGroup, updateGroup, lockGroup, reorderGroups } = useApp();
+  const { candidates, connections, groups, adjacency, groupConflicts, assignToGroup, autoDistribute, clearAllGroups, addGroup, deleteGroup, updateGroup, lockGroup, reorderGroups } = useApp();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -78,16 +78,34 @@ export default function GroupsPage() {
     return map;
   }, [groups, candidates]);
 
-  const conflictPairsByGroup = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    for (const c of groupConflicts) {
-      if (!c.groupId) continue;
-      if (!map.has(c.groupId)) map.set(c.groupId, new Set());
-      map.get(c.groupId)!.add(c.candidateAId);
-      map.get(c.groupId)!.add(c.candidateBId);
+  // Lookup: sorted "idA:idB" → relationship type
+  const connectionByPair = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const conn of connections) {
+      const [a, b] = [conn.fromId, conn.toId].sort();
+      map.set(`${a}:${b}`, conn.relationshipType);
     }
     return map;
-  }, [groupConflicts]);
+  }, [connections]);
+
+  // Per-group conflict items with names + relationship type
+  const conflictsByGroup = useMemo(() => {
+    const map = new Map<string, { aId: string; bId: string; aName: string; bName: string; type: string }[]>();
+    for (const c of groupConflicts) {
+      if (!c.groupId) continue;
+      const [a, b] = [c.candidateAId, c.candidateBId].sort();
+      const type = connectionByPair.get(`${a}:${b}`) ?? "Connection";
+      if (!map.has(c.groupId)) map.set(c.groupId, []);
+      map.get(c.groupId)!.push({
+        aId: c.candidateAId,
+        bId: c.candidateBId,
+        aName: c.candidateAName ?? c.candidateAId,
+        bName: c.candidateBName ?? c.candidateBId,
+        type,
+      });
+    }
+    return map;
+  }, [groupConflicts, connectionByPair]);
 
   const activeDragCandidate = useMemo(
     () => candidates.find((c) => c.id === activeDragId),
@@ -164,13 +182,6 @@ export default function GroupsPage() {
       return;
     }
     assignToGroup(candidateId, targetId);
-
-    const hasConflict = members.some(
-      (m) => adjacency.get(candidateId)?.has(m.id) || adjacency.get(m.id)?.has(candidateId)
-    );
-    if (hasConflict) {
-      showToast(`⚠ Conflict: ${cand.fullName} has a known connection in ${targetGroup.name}`, "warning");
-    }
   }
 
   function handleAutoDistribute() {
@@ -305,7 +316,7 @@ export default function GroupsPage() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "var(--space-lg)" }}>
                   {groups.map((group) => {
                     const members = groupedCandidates.get(group.id) ?? [];
-                    const conflicts = conflictPairsByGroup.get(group.id) ?? new Set();
+                    const conflictItems = conflictsByGroup.get(group.id) ?? [];
                     const isFull = members.length >= group.capacity;
                     const isOver = overGroupId === group.id;
                     return (
@@ -313,7 +324,7 @@ export default function GroupsPage() {
                         key={group.id}
                         group={group}
                         members={members}
-                        conflictIds={conflicts}
+                        conflictItems={conflictItems}
                         isFull={isFull}
                         isOver={isOver}
                         onRemove={(cid) => assignToGroup(cid, null)}
@@ -593,10 +604,22 @@ function SortableNameInput({ id, value, index, onChange }: {
 
 // ─── Sortable Group Card ──────────────────────────────────────────────────────
 
-function SortableGroupCard({ group, members, conflictIds, isFull, isOver, onRemove, onLock, onRename }: {
+interface ConflictItem {
+  aId: string;
+  bId: string;
+  aName: string;
+  bName: string;
+  type: string;
+}
+
+function formatRelType(t: string) {
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+
+function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onRemove, onLock, onRename }: {
   group: Group;
   members: Candidate[];
-  conflictIds: Set<string>;
+  conflictItems: ConflictItem[];
   isFull: boolean;
   isOver: boolean;
   onRemove: (id: string) => void;
@@ -613,7 +636,8 @@ function SortableGroupCard({ group, members, conflictIds, isFull, isOver, onRemo
     isDragging,
   } = useSortable({ id: group.id, data: { type: "group" } });
 
-  const hasConflicts = conflictIds.size > 0;
+  const conflictIds = new Set(conflictItems.flatMap((i) => [i.aId, i.bId]));
+  const hasConflicts = conflictItems.length > 0;
   const males = members.filter((m) => m.gender === "MALE").length;
   const females = members.filter((m) => m.gender === "FEMALE").length;
 
@@ -635,7 +659,6 @@ function SortableGroupCard({ group, members, conflictIds, isFull, isOver, onRemo
       {/* Header */}
       <div style={{ padding: "12px var(--space-lg)", borderBottom: `1px solid var(--border-color)`, display: "flex", alignItems: "center", justifyContent: "space-between", background: hasConflicts ? "var(--color-conflict-bg)" : "var(--bg-hover)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-          {/* Grip handle — drag groups to reorder */}
           <button
             ref={setActivatorNodeRef}
             {...listeners}
@@ -654,7 +677,7 @@ function SortableGroupCard({ group, members, conflictIds, isFull, isOver, onRemo
             {group.name.charAt(group.name.length - 1)}
           </div>
           <span style={{ fontWeight: "var(--font-weight-semibold)", fontSize: "var(--font-size-sm)", color: "var(--text-primary)" }}>{group.name}</span>
-          {hasConflicts && <Chip kind="danger">⚠ {Math.floor(conflictIds.size / 2)}</Chip>}
+          {hasConflicts && <Chip kind="danger">⚠ {conflictItems.length}</Chip>}
           {group.isLocked && <Chip kind="default">🔒</Chip>}
           {isFull && <Chip kind="success">Full</Chip>}
         </div>
@@ -691,6 +714,38 @@ function SortableGroupCard({ group, members, conflictIds, isFull, isOver, onRemo
           />
         ))}
       </div>
+
+      {/* Conflict list */}
+      {hasConflicts && (
+        <div style={{ borderTop: "1px solid var(--color-conflict-border)", background: "var(--color-conflict-bg)", padding: "var(--space-xs) var(--space-sm)" }}>
+          {conflictItems.map((item, i) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "3px 4px",
+                padding: "3px 2px",
+                fontSize: "var(--font-size-xs)",
+                color: "var(--color-conflict-text)",
+                lineHeight: 1.4,
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <span style={{ fontWeight: "var(--font-weight-semibold)" }}>{item.aName}</span>
+              <span style={{ opacity: 0.65 }}>and</span>
+              <span style={{ fontWeight: "var(--font-weight-semibold)" }}>{item.bName}</span>
+              <span style={{ opacity: 0.5, margin: "0 1px" }}>●</span>
+              <span style={{ opacity: 0.75 }}>{formatRelType(item.type)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
