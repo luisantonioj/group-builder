@@ -5,14 +5,49 @@ import { useApp } from "@/lib/store";
 import { findClusters } from "@/lib/conflict-detection";
 import { Chip } from "@/components/ui/chip";
 import Initials from "@/components/ui/initials";
+import Modal from "@/components/ui/modal";
+import { useToast } from "@/components/ui/toast";
 
 type Tab = "graph" | "clusters" | "table";
 
 export default function VisualizerPage() {
-  const { candidates, connections, adjacency, allConflicts } = useApp();
+  const { candidates, connections, adjacency, allConflicts, addConnection } = useApp();
+  const { showToast } = useToast();
   const [tab, setTab] = useState<Tab>("graph");
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "unassigned" | "conflicts">("all");
+  const [addConnOpen, setAddConnOpen] = useState(false);
+  const [newConn, setNewConn] = useState({
+    fromId: "",
+    toId: "",
+    relationshipType: "BARKADA",
+    note: "",
+  });
+
+  const sortedCandidates = useMemo(
+    () => [...candidates].sort((a, b) => a.fullName.localeCompare(b.fullName)),
+    [candidates]
+  );
+
+  function handleAddConnection() {
+    if (!newConn.fromId || !newConn.toId || newConn.fromId === newConn.toId) return;
+    const from = candidates.find((c) => c.id === newConn.fromId)!;
+    const to = candidates.find((c) => c.id === newConn.toId)!;
+    addConnection({
+      id: `conn-${Date.now()}`,
+      fromId: from.id,
+      toId: to.id,
+      fromName: from.fullName,
+      toName: to.fullName,
+      relationshipType: newConn.relationshipType as import("@/types").RelationshipType,
+      source: "MANUAL",
+      note: newConn.note.trim() || null,
+      createdAt: new Date().toISOString(),
+    });
+    showToast(`Connection added: ${from.fullName} ↔ ${to.fullName}`, "success");
+    setNewConn({ fromId: "", toId: "", relationshipType: "BARKADA", note: "" });
+    setAddConnOpen(false);
+  }
 
   const clusters = useMemo(
     () => findClusters(candidates, adjacency),
@@ -115,6 +150,9 @@ export default function VisualizerPage() {
             {connections.length} connections · {clusters.length} clusters
           </p>
         </div>
+        <button className="btn btn-primary" onClick={() => setAddConnOpen(true)}>
+          + Add Connection
+        </button>
       </div>
 
       <div className="tabs" style={{ marginBottom: "var(--space-lg)" }}>
@@ -588,6 +626,82 @@ export default function VisualizerPage() {
           </div>
         </div>
       )}
+
+      {/* ── Add Connection Modal ───────────────────────────────────────────────── */}
+      <Modal
+        open={addConnOpen}
+        title="Add Connection"
+        onClose={() => setAddConnOpen(false)}
+        footer={
+          <>
+            <button className="btn btn-secondary" onClick={() => setAddConnOpen(false)}>Cancel</button>
+            <button
+              className="btn btn-primary"
+              onClick={handleAddConnection}
+              disabled={!newConn.fromId || !newConn.toId || newConn.fromId === newConn.toId}
+            >
+              Add Connection
+            </button>
+          </>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+          <div className="form-group">
+            <label className="form-label">From</label>
+            <select
+              className="input"
+              value={newConn.fromId}
+              onChange={(e) => setNewConn((p) => ({ ...p, fromId: e.target.value }))}
+            >
+              <option value="">Select candidate…</option>
+              {sortedCandidates.map((c) => (
+                <option key={c.id} value={c.id}>{c.fullName}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">To</label>
+            <select
+              className="input"
+              value={newConn.toId}
+              onChange={(e) => setNewConn((p) => ({ ...p, toId: e.target.value }))}
+            >
+              <option value="">Select candidate…</option>
+              {sortedCandidates
+                .filter((c) => c.id !== newConn.fromId)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>{c.fullName}</option>
+                ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Relationship</label>
+            <select
+              className="input"
+              value={newConn.relationshipType}
+              onChange={(e) => setNewConn((p) => ({ ...p, relationshipType: e.target.value }))}
+            >
+              {(["BARKADA", "CLASSMATE", "SIBLING", "FAMILY", "CHURCHMATE", "OTHER"] as const).map((t) => (
+                <option key={t} value={t}>
+                  {t.charAt(0) + t.slice(1).toLowerCase()}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">
+              Note{" "}
+              <span style={{ color: "var(--text-muted)", fontWeight: "var(--font-weight-normal)" }}>(optional)</span>
+            </label>
+            <input
+              className="input"
+              value={newConn.note}
+              onChange={(e) => setNewConn((p) => ({ ...p, note: e.target.value }))}
+              placeholder="e.g. Same barangay"
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
