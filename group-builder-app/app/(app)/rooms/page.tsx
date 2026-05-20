@@ -26,7 +26,7 @@ import type { Candidate, Room, Gender, RoomGender } from "@/types";
 type GenderTab = "MALE" | "FEMALE";
 
 export default function RoomsPage() {
-  const { candidates, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom } = useApp();
+  const { candidates, connections, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom } = useApp();
   const { showToast } = useToast();
 
   const [genderTab, setGenderTab] = useState<GenderTab>("MALE");
@@ -58,16 +58,32 @@ export default function RoomsPage() {
     return map;
   }, [rooms, candidates]);
 
-  const conflictIdsByRoom = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    for (const c of roomConflicts) {
-      if (!c.roomId) continue;
-      if (!map.has(c.roomId)) map.set(c.roomId, new Set());
-      map.get(c.roomId)!.add(c.candidateAId);
-      map.get(c.roomId)!.add(c.candidateBId);
+  const connectionByPair = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const conn of connections) {
+      const [a, b] = [conn.fromId, conn.toId].sort();
+      map.set(`${a}:${b}`, conn.relationshipType);
     }
     return map;
-  }, [roomConflicts]);
+  }, [connections]);
+
+  const conflictsByRoom = useMemo(() => {
+    const map = new Map<string, { aId: string; bId: string; aName: string; bName: string; type: string }[]>();
+    for (const c of roomConflicts) {
+      if (!c.roomId) continue;
+      const [a, b] = [c.candidateAId, c.candidateBId].sort();
+      const type = connectionByPair.get(`${a}:${b}`) ?? "Connection";
+      if (!map.has(c.roomId)) map.set(c.roomId, []);
+      map.get(c.roomId)!.push({
+        aId: c.candidateAId,
+        bId: c.candidateBId,
+        aName: c.candidateAName ?? c.candidateAId,
+        bName: c.candidateBName ?? c.candidateBId,
+        type,
+      });
+    }
+    return map;
+  }, [roomConflicts, connectionByPair]);
 
   const activeDragCandidate = useMemo(
     () => candidates.find((c) => c.id === activeDragId),
@@ -124,12 +140,6 @@ export default function RoomsPage() {
       return;
     }
     assignToRoom(candidateId, targetId);
-    const hasConflict = members.some(
-      (m) => adjacency.get(candidateId)?.has(m.id) || adjacency.get(m.id)?.has(candidateId)
-    );
-    if (hasConflict) {
-      showToast(`⚠ Conflict: ${cand.fullName} has a known connection in ${targetRoom.name}`, "warning");
-    }
   }
 
   function handleAddRoom() {
@@ -215,13 +225,13 @@ export default function RoomsPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "var(--space-lg)" }}>
             {tabRooms.map((room) => {
               const members = roomCandidates.get(room.id) ?? [];
-              const conflicts = conflictIdsByRoom.get(room.id) ?? new Set();
+              const conflictItems = conflictsByRoom.get(room.id) ?? [];
               return (
                 <RoomDropZone
                   key={room.id}
                   room={room}
                   members={members}
-                  conflictIds={conflicts}
+                  conflictItems={conflictItems}
                   isOver={overRoomId === room.id}
                   groups={groups}
                   onRemove={(cid) => assignToRoom(cid, null)}
@@ -393,16 +403,30 @@ function RoomDraggableMember({ candidate: m, isConflict, onRemove, groups }: {
 
 // ─── Room Drop Zone ───────────────────────────────────────────────────────────
 
-function RoomDropZone({ room, members, conflictIds, isOver, groups, onRemove }: {
+interface RoomConflictItem {
+  aId: string;
+  bId: string;
+  aName: string;
+  bName: string;
+  type: string;
+}
+
+function formatRelType(t: string) {
+  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+
+function RoomDropZone({ room, members, conflictItems, isOver, groups, onRemove }: {
   room: Room;
   members: Candidate[];
-  conflictIds: Set<string>;
+  conflictItems: RoomConflictItem[];
   isOver: boolean;
   groups: { id: string; name: string }[];
   onRemove: (id: string) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: room.id });
-  const hasConflicts = conflictIds.size > 0;
+  const conflictIds = new Set(conflictItems.flatMap((i) => [i.aId, i.bId]));
+  const hasConflicts = conflictItems.length > 0;
+
   return (
     <div
       ref={setNodeRef}
@@ -415,6 +439,7 @@ function RoomDropZone({ room, members, conflictIds, isOver, groups, onRemove }: 
         boxShadow: isOver ? "0 0 0 4px rgba(46,134,193,0.15)" : "var(--shadow-sm)",
       }}
     >
+      {/* Header */}
       <div style={{ padding: "12px var(--space-lg)", borderBottom: "1px solid var(--border-color)", background: hasConflicts ? "var(--color-conflict-bg)" : "var(--bg-hover)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -422,15 +447,18 @@ function RoomDropZone({ room, members, conflictIds, isOver, groups, onRemove }: 
           </svg>
           <span style={{ fontWeight: "var(--font-weight-semibold)", fontSize: "var(--font-size-sm)" }}>{room.name}</span>
           <GenderChip gender={room.gender === "MIXED" ? "MALE" : room.gender as Gender} />
-          {hasConflicts && <Chip kind="danger">⚠</Chip>}
+          {hasConflicts && <Chip kind="danger">⚠ {conflictItems.length}</Chip>}
         </div>
         <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{members.length}/{room.capacity}</span>
       </div>
+
       {room.floor && (
         <div style={{ padding: "4px var(--space-lg)", fontSize: "var(--font-size-xs)", color: "var(--text-muted)", borderBottom: "1px solid var(--border-color)" }}>
           {room.floor} · {room.bedCount} beds
         </div>
       )}
+
+      {/* Members */}
       <div style={{ padding: "var(--space-sm)", minHeight: 64 }}>
         {members.length === 0 && (
           <div style={{ textAlign: "center", padding: "var(--space-lg) var(--space-sm)", color: "var(--text-muted)", fontSize: "var(--font-size-xs)", border: "1.5px dashed var(--border-color)", borderRadius: "var(--radius-md)", margin: 4 }}>
@@ -447,6 +475,38 @@ function RoomDropZone({ room, members, conflictIds, isOver, groups, onRemove }: 
           />
         ))}
       </div>
+
+      {/* Conflict list */}
+      {hasConflicts && (
+        <div style={{ borderTop: "1px solid var(--color-conflict-border)", background: "var(--color-conflict-bg)", padding: "var(--space-xs) var(--space-sm)" }}>
+          {conflictItems.map((item, i) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "3px 4px",
+                padding: "3px 2px",
+                fontSize: "var(--font-size-xs)",
+                color: "var(--color-conflict-text)",
+                lineHeight: 1.4,
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <span style={{ fontWeight: "var(--font-weight-semibold)" }}>{item.aName}</span>
+              <span style={{ opacity: 0.65 }}>and</span>
+              <span style={{ fontWeight: "var(--font-weight-semibold)" }}>{item.bName}</span>
+              <span style={{ opacity: 0.5, margin: "0 1px" }}>●</span>
+              <span style={{ opacity: 0.75 }}>{formatRelType(item.type)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
