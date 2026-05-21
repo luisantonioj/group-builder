@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo } from "react";
 import { useApp } from "@/lib/store";
 import DonutChart from "@/components/ui/donut-chart";
 import { formatRelativeTime, pluralize } from "@/lib/utils";
@@ -27,15 +27,6 @@ export default function DashboardPage() {
     return { total, males, females, grouped, roomed, ageDistribution };
   }, [candidates]);
 
-  const [lastRefreshed, setLastRefreshed] = useState(() => Date.now());
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const handleRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    setLastRefreshed(Date.now());
-    setTimeout(() => setIsRefreshing(false), 600);
-  }, []);
-
   const groupConflictCount = allConflicts.filter((c) => c.groupId).length;
   const roomConflictCount = allConflicts.filter((c) => c.roomId).length;
 
@@ -48,22 +39,6 @@ export default function DashboardPage() {
         <div>
           <h1 className="page-title">Dashboard</h1>
           <p className="page-sub">{batch.name} · Candidate overview</p>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-          <button className="btn btn-secondary" onClick={handleRefresh} disabled={isRefreshing}>
-            <svg
-              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              className={isRefreshing ? "icon-spin" : ""}
-              style={{ display: "block" }}
-            >
-              <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-            </svg>
-            Refresh
-          </button>
-          <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
-            Updated {formatRelativeTime(new Date(lastRefreshed).toISOString())}
-          </span>
         </div>
       </div>
 

@@ -29,13 +29,7 @@ export default async function AppLayout({
               }}
             />
             <AppShell>
-              <Topbar
-                user={{
-                  name: session.user?.name ?? "Shepherd",
-                  email: session.user?.email ?? "",
-                  role: (session.user as { role?: string })?.role ?? "SHEPHERD",
-                }}
-              />
+              <Topbar />
               <main
                 className="app-main"
                 style={{ flex: 1, paddingBottom: "calc(var(--space-xl) + 28px)" }}

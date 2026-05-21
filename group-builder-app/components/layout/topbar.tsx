@@ -1,11 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSidebarState } from "@/lib/sidebar-state";
-
-interface TopbarProps {
-  user: { name: string; email: string; role: string };
-}
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false);
@@ -61,8 +58,16 @@ function ThemeToggle() {
   );
 }
 
-export default function Topbar({ user }: TopbarProps) {
+export default function Topbar() {
   const { openMobile } = useSidebarState();
+  const router = useRouter();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    router.refresh();
+    setTimeout(() => setIsRefreshing(false), 600);
+  }, [router]);
 
   return (
     <header className="topbar">
@@ -104,37 +109,17 @@ export default function Topbar({ user }: TopbarProps) {
 
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
         <ThemeToggle />
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--space-sm)",
-            padding: "4px 10px",
-            borderRadius: "var(--radius-sm)",
-            border: "1px solid var(--border-color)",
-            fontSize: "var(--font-size-sm)",
-          }}
-        >
-          <div
-            style={{
-              width: 24,
-              height: 24,
-              borderRadius: "var(--radius-full)",
-              background: "var(--color-primary)",
-              color: "white",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "var(--font-size-xs)",
-              fontWeight: "var(--font-weight-bold)",
-            }}
+        <button className="btn btn-secondary" onClick={handleRefresh} disabled={isRefreshing}>
+          <svg
+            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            className={isRefreshing ? "icon-spin" : ""}
+            style={{ display: "block" }}
           >
-            {user.name.charAt(0).toUpperCase()}
-          </div>
-          <span className="topbar-user-name" style={{ color: "var(--text-primary)", fontWeight: "var(--font-weight-medium)" }}>
-            {user.name}
-          </span>
-        </div>
+            <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          Refresh
+        </button>
       </div>
     </header>
   );
