@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useApp } from "@/lib/store";
 import DonutChart from "@/components/ui/donut-chart";
 import { formatRelativeTime, pluralize } from "@/lib/utils";
@@ -27,6 +27,15 @@ export default function DashboardPage() {
     return { total, males, females, grouped, roomed, ageDistribution };
   }, [candidates]);
 
+  const [lastRefreshed, setLastRefreshed] = useState(() => Date.now());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    setLastRefreshed(Date.now());
+    setTimeout(() => setIsRefreshing(false), 600);
+  }, []);
+
   const groupConflictCount = allConflicts.filter((c) => c.groupId).length;
   const roomConflictCount = allConflicts.filter((c) => c.roomId).length;
 
@@ -40,14 +49,21 @@ export default function DashboardPage() {
           <h1 className="page-title">Dashboard</h1>
           <p className="page-sub">{batch.name} · Candidate overview</p>
         </div>
-        <div style={{ display: "flex", gap: "var(--space-sm)" }}>
-          <button className="btn btn-secondary">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+          <button className="btn btn-secondary" onClick={handleRefresh} disabled={isRefreshing}>
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              className={isRefreshing ? "icon-spin" : ""}
+              style={{ display: "block" }}
+            >
               <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
             </svg>
             Refresh
           </button>
+          <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+            Updated {formatRelativeTime(new Date(lastRefreshed).toISOString())}
+          </span>
         </div>
       </div>
 
@@ -188,17 +204,23 @@ export default function DashboardPage() {
           <div style={{ fontWeight: "var(--font-weight-semibold)", color: "var(--text-primary)" }}>Recent Activity</div>
         </div>
         <div style={{ padding: "var(--space-sm) 0" }}>
-          {activities.slice(0, 8).map((act) => (
-            <div key={act.id} style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-md)", padding: "10px var(--space-xl)", borderBottom: "1px solid var(--border-color)" }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-primary)", marginTop: 5, flexShrink: 0 }} />
-              <div style={{ flex: 1 }}>
-                <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-primary)" }}>{act.description}</span>
-                <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 2 }}>
-                  {act.userName} · {formatRelativeTime(act.createdAt)}
+          {activities.length === 0 ? (
+            <div style={{ padding: "var(--space-2xl)", textAlign: "center", color: "var(--text-muted)", fontSize: "var(--font-size-sm)" }}>
+              No activity yet.
+            </div>
+          ) : (
+            activities.slice(0, 8).map((act) => (
+              <div key={act.id} style={{ display: "flex", alignItems: "flex-start", gap: "var(--space-md)", padding: "10px var(--space-xl)", borderBottom: "1px solid var(--border-color)" }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-primary)", marginTop: 5, flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-primary)" }}>{act.description}</span>
+                  <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 2 }}>
+                    {act.userName} · {formatRelativeTime(act.createdAt)}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </div>

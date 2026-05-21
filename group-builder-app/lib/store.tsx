@@ -292,10 +292,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const assignToGroup = useCallback((candidateId: string, groupId: string | null) => {
     dispatch({ type: "ASSIGN_TO_GROUP", payload: { candidateId, groupId } });
+    const candidate = state.candidates.find((c) => c.id === candidateId);
+    const group = groupId ? state.groups.find((g) => g.id === groupId) : null;
+    if (candidate) {
+      if (group) addActivity(`Assigned ${candidate.fullName} to ${group.name}`, "group", "assigned");
+      else addActivity(`Removed ${candidate.fullName} from group`, "group", "removed");
+    }
     if (!navigator.onLine) {
       enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } });
     }
-  }, []);
+  }, [state.candidates, state.groups, addActivity]);
 
   const autoDistribute = useCallback(() => {
     const unassigned = state.candidates.filter((c) => !c.groupId);
@@ -335,10 +341,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const assignToRoom = useCallback((candidateId: string, roomId: string | null) => {
     dispatch({ type: "ASSIGN_TO_ROOM", payload: { candidateId, roomId } });
+    const candidate = state.candidates.find((c) => c.id === candidateId);
+    const room = roomId ? state.rooms.find((r) => r.id === roomId) : null;
+    if (candidate) {
+      if (room) addActivity(`Assigned ${candidate.fullName} to ${room.name}`, "room", "assigned");
+      else addActivity(`Removed ${candidate.fullName} from room`, "room", "removed");
+    }
     if (!navigator.onLine) {
       enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { roomId } });
     }
-  }, []);
+  }, [state.candidates, state.rooms, addActivity]);
 
   const value: AppContextValue = {
     ...state,
