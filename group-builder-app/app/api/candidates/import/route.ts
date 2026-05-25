@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOrgSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { hmac, encrypt } from "@/lib/crypto";
 import { fuzzyMatchInviter } from "@/lib/fuzzy-match";
@@ -20,7 +20,7 @@ function encField(val: unknown): string | null {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json() as { rows: ImportRow[]; mapping: ColumnMapping; batchId: string };
@@ -33,6 +33,10 @@ export async function POST(req: NextRequest) {
   if (rows.length > MAX_ROWS) {
     return NextResponse.json({ error: `Maximum ${MAX_ROWS} rows per import` }, { status: 400 });
   }
+
+  // Verify batch belongs to this org
+  const batch = await prisma.batch.findFirst({ where: { id: batchId, orgId: session.orgId } });
+  if (!batch) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
 
   const existingCandidates = await prisma.candidate.findMany({ where: { batchId } });
   const results = { created: 0, skipped: 0, duplicates: [] as string[] };

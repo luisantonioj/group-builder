@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSidebarState } from "@/lib/sidebar-state";
+import { useApp } from "@/lib/store";
 
 function ThemeToggle() {
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("bld-theme");
+    const saved = localStorage.getItem("app-theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     setDark(saved === "dark" || (!saved && prefersDark));
   }, []);
@@ -17,7 +18,7 @@ function ThemeToggle() {
     const next = !dark;
     setDark(next);
     document.documentElement.setAttribute("data-theme", next ? "dark" : "light");
-    localStorage.setItem("bld-theme", next ? "dark" : "light");
+    localStorage.setItem("app-theme", next ? "dark" : "light");
   }
 
   return (
@@ -62,6 +63,7 @@ export default function Topbar() {
   const { openMobile } = useSidebarState();
   const router = useRouter();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const { batch } = useApp();
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -86,25 +88,27 @@ export default function Topbar() {
         </button>
 
         <span className="topbar-batch-info" style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
-          YE #19 · Batch active
+          {batch.name} · {batch.isActive ? "Active" : "Inactive"}
         </span>
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            background: "#f0fdf4",
-            color: "var(--color-success)",
-            border: "1px solid #bbf7d0",
-            borderRadius: "var(--radius-full)",
-            padding: "2px 8px",
-            fontSize: "var(--font-size-xs)",
-            fontWeight: "var(--font-weight-semibold)",
-          }}
-        >
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--color-success)", display: "inline-block" }} />
-          Active
-        </span>
+        {batch.isActive && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              background: "#f0fdf4",
+              color: "var(--color-success)",
+              border: "1px solid #bbf7d0",
+              borderRadius: "var(--radius-full)",
+              padding: "2px 8px",
+              fontSize: "var(--font-size-xs)",
+              fontWeight: "var(--font-weight-semibold)",
+            }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--color-success)", display: "inline-block" }} />
+            Active
+          </span>
+        )}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>

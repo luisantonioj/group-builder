@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOrgSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await auth();
+  const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const degree = req.nextUrl.searchParams.get("degree") === "2" ? 2 : 1;

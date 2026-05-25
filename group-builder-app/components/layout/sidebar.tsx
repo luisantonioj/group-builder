@@ -5,35 +5,44 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { useSidebarState } from "@/lib/sidebar-state";
+import { useOrg } from "@/lib/org-context";
+import { useTerms } from "@/lib/use-terms";
+import type { OrgFeatures } from "@/types";
 
 interface SidebarProps {
   user: { name: string; role: string };
 }
 
-const NAV_ITEMS = [
-  {
-    section: "Overview",
-    items: [{ href: "/dashboard", label: "Dashboard", icon: "dashboard" }],
-  },
-  {
-    section: "Candidate Data",
-    items: [
-      { href: "/masterlist", label: "Masterlist", icon: "users" },
-      { href: "/visualizer", label: "Connections", icon: "network" },
-    ],
-  },
-  {
-    section: "Planning",
-    items: [
-      { href: "/groups", label: "Group Formation", icon: "grid" },
-      { href: "/rooms", label: "Room Assignment", icon: "bed" },
-    ],
-  },
-  {
-    section: "Output",
-    items: [{ href: "/reports", label: "Reports & Export", icon: "file" }],
-  },
-];
+function buildNavItems(features: OrgFeatures) {
+  return [
+    {
+      section: "Overview",
+      items: [{ href: "/dashboard", label: "Dashboard", icon: "dashboard" }],
+    },
+    {
+      section: "Candidate Data",
+      items: [
+        { href: "/masterlist", label: "Masterlist", icon: "users" },
+        ...(features.visualizer
+          ? [{ href: "/visualizer", label: "Connections", icon: "network" }]
+          : []),
+      ],
+    },
+    {
+      section: "Planning",
+      items: [
+        { href: "/groups", label: "Group Formation", icon: "grid" },
+        ...(features.roomAssignment
+          ? [{ href: "/rooms", label: "Room Assignment", icon: "bed" }]
+          : []),
+      ],
+    },
+    {
+      section: "Output",
+      items: [{ href: "/reports", label: "Reports & Export", icon: "file" }],
+    },
+  ];
+}
 
 const ICON_PROPS = {
   width: 18,
@@ -66,15 +75,19 @@ function NavIcon({ name }: { name: string }) {
   }
 }
 
-function roleLabel(role: string) {
-  if (role === "ADMIN") return "Head Shepherd";
-  if (role === "VIEWER") return "Viewer";
-  return "Shepherd";
-}
-
 export default function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const { collapsed, mobileOpen, toggleCollapsed, closeMobile } = useSidebarState();
+  const { orgName, config } = useOrg();
+  const terms = useTerms();
+
+  const navItems = buildNavItems(config.features);
+
+  function roleLabel(role: string) {
+    if (role === "ADMIN") return terms.headShepherd;
+    if (role === "VIEWER") return "Viewer";
+    return terms.shepherd;
+  }
 
   return (
     <aside className={cn("sidebar", collapsed && "collapsed", mobileOpen && "mobile-open")}>
@@ -114,7 +127,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 Group Builder
               </div>
               <div style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)", lineHeight: 1.2, whiteSpace: "nowrap" }}>
-                BLD Youth Ministry
+                {orgName}
               </div>
             </div>
           )}
@@ -141,7 +154,7 @@ export default function Sidebar({ user }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="sidebar-nav">
-        {NAV_ITEMS.map((section) => (
+        {navItems.map((section) => (
           <div key={section.section}>
             {!collapsed && (
               <div className="sidebar-section-label">{section.section}</div>

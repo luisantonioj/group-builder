@@ -11,14 +11,7 @@ import {
   useMemo,
   useReducer,
 } from "react";
-import {
-  MOCK_CANDIDATES,
-  MOCK_CONNECTIONS,
-  MOCK_GROUPS,
-  MOCK_ROOMS,
-  MOCK_ACTIVITIES,
-  MOCK_BATCH,
-} from "./mock-data";
+import { getMockInitialState } from "./mock-data";
 import {
   buildAdjacencyMap,
   detectGroupConflicts,
@@ -148,14 +141,6 @@ function reducer(state: AppState, action: Action): AppState {
   }
 }
 
-const initialState: AppState = {
-  batch: MOCK_BATCH,
-  candidates: MOCK_CANDIDATES,
-  connections: MOCK_CONNECTIONS.filter((c) => c.source === "MANUAL"),
-  groups: MOCK_GROUPS,
-  rooms: MOCK_ROOMS,
-  activities: MOCK_ACTIVITIES,
-};
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -187,8 +172,16 @@ interface AppContextValue extends AppState {
 
 const AppContext = createContext<AppContextValue>(null!);
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, initialState);
+export function AppProvider({
+  children,
+  isBld = true,
+  currentUser = { id: "demo-admin", name: "Shepherd" },
+}: {
+  children: React.ReactNode;
+  isBld?: boolean;
+  currentUser?: { id: string; name: string };
+}) {
+  const [state, dispatch] = useReducer(reducer, getMockInitialState(isBld));
 
   const autoConnections = useMemo(
     () => deriveAutoConnections(state.candidates),
@@ -231,8 +224,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       type: "ADD_ACTIVITY",
       payload: {
         id: `act-${Date.now()}`,
-        userId: "demo-admin",
-        userName: "Shepherd",
+        userId: currentUser.id,
+        userName: currentUser.name,
         action,
         entityType,
         entityId: null,
@@ -240,7 +233,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         createdAt: new Date().toISOString(),
       },
     });
-  }, []);
+  }, [currentUser]);
 
   const addCandidate = useCallback((candidate: Candidate) => {
     dispatch({ type: "ADD_CANDIDATE", payload: candidate });

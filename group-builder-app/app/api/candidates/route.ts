@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOrgSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { hmac } from "@/lib/crypto";
 import { z } from "zod";
@@ -30,23 +30,27 @@ const CreateSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
+  const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const batchId = searchParams.get("batchId");
-  const page = parseInt(searchParams.get("page") ?? "1");
+  const batchId  = searchParams.get("batchId");
+  const page     = parseInt(searchParams.get("page")     ?? "1");
   const pageSize = parseInt(searchParams.get("pageSize") ?? "100");
 
   try {
+    const where = {
+      batch: { orgId: session.orgId },
+      ...(batchId ? { batchId } : {}),
+    };
     const [candidates, total] = await Promise.all([
       prisma.candidate.findMany({
-        where: batchId ? { batchId } : undefined,
+        where,
         orderBy: { fullName: "asc" },
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      prisma.candidate.count({ where: batchId ? { batchId } : undefined }),
+      prisma.candidate.count({ where }),
     ]);
     return NextResponse.json({ data: candidates, total, page, pageSize });
   } catch {
@@ -55,7 +59,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
@@ -65,11 +69,24 @@ export async function POST(req: NextRequest) {
   }
 
   const data = parsed.data;
+
+  // Verify the batch belongs to this org
+  try {
+    const batch = await prisma.batch.findFirst({
+      where: { id: data.batchId, orgId: session.orgId },
+    });
+    if (!batch) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+  } catch {
+    return NextResponse.json({ error: "Database not configured" }, { status: 503 });
+  }
+
   const contactHash = data.contact ? hmac(data.contact) : undefined;
 
-  // Check for duplicate
+  // Check for duplicate within the same org
   if (contactHash) {
-    const existing = await prisma.candidate.findFirst({ where: { contactHash } });
+    const existing = await prisma.candidate.findFirst({
+      where: { contactHash, batch: { orgId: session.orgId } },
+    });
     if (existing) {
       return NextResponse.json({ error: "Duplicate contact number detected", existing }, { status: 409 });
     }
@@ -80,16 +97,15 @@ export async function POST(req: NextRequest) {
       data: {
         ...data,
         contactHash,
-        // Encrypted fields passed as plaintext — Prisma middleware encrypts them
-        birthdayEnc: data.birthday ?? null,
-        addressEnc: data.address ?? null,
-        facebookEnc: data.facebook ?? null,
-        contactEnc: data.contact ?? null,
-        fatherNameEnc: data.fatherName ?? null,
+        birthdayEnc:      data.birthday      ?? null,
+        addressEnc:       data.address       ?? null,
+        facebookEnc:      data.facebook      ?? null,
+        contactEnc:       data.contact       ?? null,
+        fatherNameEnc:    data.fatherName    ?? null,
         fatherContactEnc: data.fatherContact ?? null,
-        motherNameEnc: data.motherName ?? null,
+        motherNameEnc:    data.motherName    ?? null,
         motherContactEnc: data.motherContact ?? null,
-        allergiesEnc: data.allergies ?? null,
+        allergiesEnc:     data.allergies     ?? null,
         shepherdNotesEnc: data.shepherdNotes ?? null,
       },
     });

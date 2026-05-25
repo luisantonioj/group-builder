@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Shepherd's Grouping System — BLD Youth Ministry",
+  title: "Group Builder — Shepherd's Grouping System",
   description:
-    "Youth Encounter candidate management and conflict-aware group formation tool for Bukas Loob sa Diyos Youth Ministry.",
+    "Organization-aware candidate management and conflict-aware group formation tool.",
   manifest: "/manifest.json",
   icons: {
     icon: "/icons/icon-192.png",
@@ -32,7 +32,7 @@ export default function RootLayout({
             __html: `
 (function(){
   try {
-    var t = localStorage.getItem('bld-theme');
+    var t = localStorage.getItem('app-theme');
     if (t === 'dark') document.documentElement.setAttribute('data-theme','dark');
     else if (t === 'light') document.documentElement.setAttribute('data-theme','light');
   } catch(e) {}

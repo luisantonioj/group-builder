@@ -48,29 +48,73 @@ enum ConflictStatus {
   DISMISSED
 }
 
+// ─── Organization ─────────────────────────────────────────────────────────────
+
+model Organization {
+  id        String     @id @default(cuid())
+  name      String
+  slug      String     @unique  // e.g. "bld-youth-ministry"
+  isBld     Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  users   User[]
+  batches Batch[]
+  config  OrgConfig?
+}
+
+// ─── OrgConfig ────────────────────────────────────────────────────────────────
+
+model OrgConfig {
+  id               String  @id @default(cuid())
+  orgId            String  @unique
+  termCandidate    String? // BLD: "Lamb"          | generic: "Participant"
+  termGroup        String? // BLD: "Kordero"        | generic: "Group"
+  termBatch        String? // BLD: "YE Batch"       | generic: "Event"
+  termShepherd     String? // BLD: "Shepherd"       | generic: "Facilitator"
+  termHeadShepherd String? // BLD: "Head Shepherd"  | generic: "Admin"
+  features         Json    @default("{}") // { roomAssignment, visualizer, importExcel }
+  primaryColor     String?
+  logoUrl          String?
+
+  org Organization @relation(fields: [orgId], references: [id])
+}
+
 // ─── Users (Shepherds) ────────────────────────────────────────────────────────
 
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
+  id           String        @id @default(cuid())
+  email        String
   passwordHash String
   name         String
-  role         Role       @default(SHEPHERD)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  activities   Activity[]
+  role         Role          @default(SHEPHERD)
+  orgId        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  org        Organization? @relation(fields: [orgId], references: [id])
+  activities Activity[]
+
+  @@unique([email, orgId])
+  @@index([orgId])
 }
 
 // ─── Batch ────────────────────────────────────────────────────────────────────
 
 model Batch {
   id         String      @id @default(cuid())
-  name       String      @unique  // e.g. "YE #18"
+  name       String      // e.g. "YE #19"
   isActive   Boolean     @default(false)
+  orgId      String?
   createdAt  DateTime    @default(now())
+
+  org        Organization? @relation(fields: [orgId], references: [id])
   candidates Candidate[]
   groups     Group[]
   rooms      Room[]
+
+  @@unique([name, orgId])
+  @@index([orgId])
 }
 
 // ─── Candidate (Lamb) ─────────────────────────────────────────────────────────

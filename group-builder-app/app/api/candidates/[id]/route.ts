@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOrgSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await auth();
+  const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const candidate = await prisma.candidate.findUnique({ where: { id: params.id } });
+    const candidate = await prisma.candidate.findFirst({
+      where: { id: params.id, batch: { orgId: session.orgId } },
+    });
     if (!candidate) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ data: candidate });
   } catch {
@@ -16,11 +18,17 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await auth();
+  const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
   try {
+    // Verify ownership before update
+    const existing = await prisma.candidate.findFirst({
+      where: { id: params.id, batch: { orgId: session.orgId } },
+    });
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
     const updated = await prisma.candidate.update({
       where: { id: params.id },
       data: body,
@@ -32,15 +40,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await auth();
+  const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const role = (session.user as { role?: string })?.role;
-  if (role !== "ADMIN" && role !== "SHEPHERD") {
+  if (session.userRole !== "ADMIN" && session.userRole !== "SHEPHERD") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
+    const existing = await prisma.candidate.findFirst({
+      where: { id: params.id, batch: { orgId: session.orgId } },
+    });
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
     await prisma.candidate.delete({ where: { id: params.id } });
     return NextResponse.json({ message: "Deleted" });
   } catch {

@@ -1,15 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+
+  const [orgSlug,   setOrgSlug]   = useState(searchParams.get("orgSlug") ?? "");
+  const [orgName,   setOrgName]   = useState<string | null>(null);
+  const [email,     setEmail]     = useState("");
+  const [password,  setPassword]  = useState("");
+  const [error,     setError]     = useState<string | null>(null);
+  const [loading,   setLoading]   = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
+
+  // Show a success notice when redirected here after register/join
+  const registered = searchParams.get("registered") === "1";
+  const joined     = searchParams.get("joined")     === "1";
+
+  // Lookup org name when orgSlug changes (on blur)
+  async function lookupOrg(slug: string) {
+    const s = slug.trim();
+    if (!s) { setOrgName(null); return; }
+    setLookingUp(true);
+    try {
+      const res = await fetch(`/api/org/lookup?slug=${encodeURIComponent(s)}`);
+      if (res.ok) {
+        const data = await res.json() as { name: string };
+        setOrgName(data.name);
+      } else {
+        setOrgName(null);
+      }
+    } catch {
+      setOrgName(null);
+    } finally {
+      setLookingUp(false);
+    }
+  }
+
+  // Run lookup on mount if orgSlug was pre-filled from query param
+  useEffect(() => {
+    if (orgSlug) lookupOrg(orgSlug);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -18,15 +54,23 @@ export default function LoginPage() {
     const result = await signIn("credentials", {
       email,
       password,
+      orgSlug: orgSlug.trim(),
       redirect: false,
     });
     setLoading(false);
     if (result?.error) {
-      setError("Invalid email or password.");
+      setError("Invalid credentials or organization slug.");
     } else {
       router.refresh();
       router.push("/dashboard");
     }
+  }
+
+  function fillDemo() {
+    setOrgSlug("bld-youth-ministry");
+    setEmail("admin@bld.ph");
+    setPassword("shepherd123");
+    lookupOrg("bld-youth-ministry");
   }
 
   return (
@@ -81,11 +125,48 @@ export default function LoginPage() {
             Shepherd&apos;s Grouping System
           </h1>
           <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", marginTop: 4 }}>
-            BLD Youth Ministry · Youth Encounter
+            {orgName
+              ? `Signing into: ${orgName}`
+              : "Group Builder · Sign in to your organization"}
           </p>
         </div>
 
+        {(registered || joined) && (
+          <p
+            style={{
+              fontSize: "var(--font-size-sm)",
+              color: "var(--color-success)",
+              background: "#f0fdf4",
+              border: "1px solid #bbf7d0",
+              borderRadius: "var(--radius-sm)",
+              padding: "var(--space-sm) var(--space-md)",
+              marginBottom: "var(--space-lg)",
+              textAlign: "center",
+            }}
+          >
+            {registered ? "Organization registered! Sign in below." : "Account created! Sign in below."}
+          </p>
+        )}
+
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+          <div className="form-group">
+            <label className="form-label" htmlFor="orgSlug">
+              Organization
+              {lookingUp && <span style={{ color: "var(--text-muted)", fontWeight: "normal" }}> · looking up…</span>}
+            </label>
+            <input
+              id="orgSlug"
+              type="text"
+              className="input"
+              value={orgSlug}
+              onChange={(e) => { setOrgSlug(e.target.value); setOrgName(null); }}
+              onBlur={(e) => lookupOrg(e.target.value)}
+              placeholder="organization-slug"
+              required
+              autoFocus={!orgSlug}
+            />
+          </div>
+
           <div className="form-group">
             <label className="form-label" htmlFor="email">Email</label>
             <input
@@ -94,9 +175,9 @@ export default function LoginPage() {
               className="input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="shepherd@bld.ph"
+              placeholder="you@example.com"
               required
-              autoFocus
+              autoFocus={!!orgSlug}
             />
           </div>
 
@@ -138,22 +219,46 @@ export default function LoginPage() {
           </button>
         </form>
 
+        <div style={{ marginTop: "var(--space-lg)", display: "flex", flexDirection: "column", alignItems: "center", gap: "var(--space-sm)" }}>
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
+            New organization?{" "}
+            <Link href="/register" style={{ color: "var(--color-primary)" }}>Register here</Link>
+          </p>
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
+            Joining an existing org?{" "}
+            <Link href="/join" style={{ color: "var(--color-primary)" }}>Create account</Link>
+          </p>
+        </div>
+
         {process.env.NODE_ENV === "development" && (
-          <p
+          <button
+            type="button"
+            onClick={fillDemo}
             style={{
               marginTop: "var(--space-lg)",
-              fontSize: "var(--font-size-xs)",
-              color: "var(--text-muted)",
-              textAlign: "center",
+              width: "100%",
               background: "var(--bg-hover)",
+              border: "none",
               borderRadius: "var(--radius-sm)",
               padding: "var(--space-sm)",
+              fontSize: "var(--font-size-xs)",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              fontFamily: "var(--font-sans)",
             }}
           >
-            Dev: <strong>admin@bld.ph</strong> / <strong>shepherd123</strong>
-          </p>
+            Dev: fill BLD demo credentials
+          </button>
         )}
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

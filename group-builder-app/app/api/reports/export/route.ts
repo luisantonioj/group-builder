@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOrgSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 // Generates a JSON export of all data for the batch.
@@ -7,21 +7,23 @@ import { prisma } from "@/lib/prisma";
 // Full PDF generation with pdfkit would be added in a future enhancement.
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
+  const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const role = (session.user as { role?: string })?.role;
-  if (role === "VIEWER") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (session.userRole === "VIEWER") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const batchId = req.nextUrl.searchParams.get("batchId");
-  const format = req.nextUrl.searchParams.get("format") ?? "json";
+  const format  = req.nextUrl.searchParams.get("format") ?? "json";
 
   try {
+    const orgWhere = { batch: { orgId: session.orgId } };
+    const batchFilter = batchId ? { batchId } : {};
+
     const [candidates, groups, rooms, connections] = await Promise.all([
-      prisma.candidate.findMany({ where: batchId ? { batchId } : undefined, orderBy: { fullName: "asc" } }),
-      prisma.group.findMany({ where: batchId ? { batchId } : undefined }),
-      prisma.room.findMany({ where: batchId ? { batchId } : undefined }),
-      prisma.connection.findMany(),
+      prisma.candidate.findMany({ where: { ...orgWhere, ...batchFilter }, orderBy: { fullName: "asc" } }),
+      prisma.group.findMany({ where: { ...orgWhere, ...batchFilter } }),
+      prisma.room.findMany({ where: { ...orgWhere, ...batchFilter } }),
+      prisma.connection.findMany({ where: { from: { batch: { orgId: session.orgId } } } }),
     ]);
 
     const payload = { candidates, groups, rooms, connections, exportedAt: new Date().toISOString() };

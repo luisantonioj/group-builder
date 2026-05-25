@@ -13,6 +13,33 @@ export type RelationshipType =
 export type ConnectionSource = "AUTO" | "MANUAL";
 export type ConflictStatus = "ACTIVE" | "DISMISSED";
 
+// ─── Organization ─────────────────────────────────────────────────────────────
+
+export interface OrgFeatures {
+  roomAssignment: boolean;
+  visualizer: boolean;
+  importExcel: boolean;
+}
+
+export interface OrgConfig {
+  termCandidate: string;
+  termGroup: string;
+  termBatch: string;
+  termShepherd: string;
+  termHeadShepherd: string;
+  features: OrgFeatures;
+  primaryColor: string | null;
+  logoUrl: string | null;
+}
+
+export interface OrgContext {
+  orgId: string;
+  orgSlug: string;
+  orgName: string;
+  isBld: boolean;
+  config: OrgConfig;
+}
+
 // ─── User ─────────────────────────────────────────────────────────────────────
 
 export interface User {
@@ -20,6 +47,10 @@ export interface User {
   email: string;
   name: string;
   role: Role;
+  orgId: string;
+  orgSlug: string;
+  orgName: string;
+  isBldOrg: boolean;
 }
 
 // ─── Batch ────────────────────────────────────────────────────────────────────

@@ -1,34 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireOrgSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
-  const session = await auth();
+  const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const batchId = req.nextUrl.searchParams.get("batchId");
   try {
     const connections = await prisma.connection.findMany({
+      where: {
+        from: { batch: { orgId: session.orgId } },
+        ...(batchId ? { from: { batchId, batch: { orgId: session.orgId } } } : {}),
+      },
       include: {
         from: { select: { id: true, fullName: true, gender: true, batchId: true } },
-        to: { select: { id: true, fullName: true, gender: true, batchId: true } },
+        to:   { select: { id: true, fullName: true, gender: true, batchId: true } },
       },
     });
-    const filtered = batchId
-      ? connections.filter((c) => c.from.batchId === batchId || c.to.batchId === batchId)
-      : connections;
-    return NextResponse.json({ data: filtered });
+    return NextResponse.json({ data: connections });
   } catch {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
+  const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
   try {
+    // Verify both candidates belong to this org
+    const [fromCand, toCand] = await Promise.all([
+      prisma.candidate.findFirst({ where: { id: body.fromId, batch: { orgId: session.orgId } } }),
+      prisma.candidate.findFirst({ where: { id: body.toId,   batch: { orgId: session.orgId } } }),
+    ]);
+    if (!fromCand || !toCand) {
+      return NextResponse.json({ error: "Candidate not found" }, { status: 404 });
+    }
+
     const conn = await prisma.connection.create({ data: body });
     return NextResponse.json({ data: conn }, { status: 201 });
   } catch {
@@ -37,11 +47,17 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await auth();
+  const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await req.json() as { id: string };
   try {
+    // Verify the connection belongs to this org before deleting
+    const conn = await prisma.connection.findFirst({
+      where: { id, from: { batch: { orgId: session.orgId } } },
+    });
+    if (!conn) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
     await prisma.connection.delete({ where: { id } });
     return NextResponse.json({ message: "Deleted" });
   } catch {

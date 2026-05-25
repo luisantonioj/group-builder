@@ -78,6 +78,28 @@ export const MOCK_ACTIVITIES: Activity[] = [
   { id: "act5", userId: "demo-admin", userName: "Ate Joan Reyes", action: "updated", entityType: "candidate", entityId: "c47", description: "Added shepherd note: siblings with Dianne — separate from group", createdAt: "2026-05-12T14:00:00Z" },
 ];
 
+// Factory: returns initial state for org type — BLD gets full mock data, others get blank slate
+export function getMockInitialState(isBld: boolean) {
+  if (isBld) {
+    return {
+      batch:       MOCK_BATCH,
+      candidates:  MOCK_CANDIDATES,
+      connections: MOCK_CONNECTIONS.filter((c) => c.source === "MANUAL"),
+      groups:      MOCK_GROUPS,
+      rooms:       MOCK_ROOMS,
+      activities:  MOCK_ACTIVITIES,
+    };
+  }
+  return {
+    batch:       { id: "batch-new", name: "Event #1", isActive: true, createdAt: new Date().toISOString() },
+    candidates:  [] as typeof MOCK_CANDIDATES,
+    connections: [] as typeof MOCK_CONNECTIONS,
+    groups:      [] as typeof MOCK_GROUPS,
+    rooms:       [] as typeof MOCK_ROOMS,
+    activities:  [] as typeof MOCK_ACTIVITIES,
+  };
+}
+
 // Helper: get candidates for a group
 export function getCandidatesForGroup(
   groupId: string,

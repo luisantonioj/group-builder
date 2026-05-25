@@ -8,10 +8,18 @@ declare module "next-auth" {
       name: string;
       email: string;
       role: string;
+      orgId: string;
+      orgSlug: string;
+      orgName: string;
+      isBldOrg: boolean;
     };
   }
   interface User {
     role?: string;
+    orgId?: string;
+    orgSlug?: string;
+    orgName?: string;
+    isBldOrg?: boolean;
   }
 }
 
@@ -19,5 +27,9 @@ declare module "next-auth/jwt" {
   interface JWT {
     id: string;
     role: string;
+    orgId: string;
+    orgSlug: string;
+    orgName: string;
+    isBldOrg: boolean;
   }
 }
