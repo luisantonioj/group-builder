@@ -105,14 +105,14 @@ export default function EventsClient({ isAdmin }: { isAdmin: boolean }) {
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: "0 auto", padding: "var(--space-xl)" }}>
+    <div>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--space-xl)" }}>
+      <div className="page-header">
         <div>
-          <h1 style={{ fontSize: "var(--font-size-xl)", fontWeight: "var(--font-weight-bold)", color: "var(--text-primary)", margin: 0 }}>
+          <h1 className="page-title">
             All {terms.event}s
           </h1>
-          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", marginTop: 4 }}>
+          <p className="page-sub">
             Manage events for your organization. Click an event to load it.
           </p>
         </div>
@@ -151,7 +151,7 @@ export default function EventsClient({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "var(--space-lg)" }}>
         {events.map((ev) => {
           const isLoaded = currentEvent.id === ev.id;
           const isSwitching = switching === ev.id;
@@ -165,10 +165,14 @@ export default function EventsClient({ isAdmin }: { isAdmin: boolean }) {
                 border: `2px solid ${isLoaded ? "var(--color-primary)" : "var(--border-color)"}`,
                 borderRadius: "var(--radius-lg)",
                 padding: "var(--space-lg)",
-                transition: "border-color var(--transition-fast)",
+                transition: "all var(--transition-fast)",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                boxShadow: isLoaded ? "var(--shadow-md)" : "var(--shadow-sm)",
               }}
             >
-              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--space-md)" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "var(--space-md)", marginBottom: "var(--space-md)" }}>
                 {/* Name + badges */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {editingId === ev.id ? (
@@ -179,70 +183,43 @@ export default function EventsClient({ isAdmin }: { isAdmin: boolean }) {
                         onChange={(e) => setEditName(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter") handleRename(ev); if (e.key === "Escape") setEditingId(null); }}
                         autoFocus
-                        style={{ maxWidth: 240 }}
+                        style={{ maxWidth: "100%" }}
                       />
                       <button className="btn btn-primary" style={{ padding: "4px 10px", fontSize: "var(--font-size-xs)" }} onClick={() => handleRename(ev)}>Save</button>
-                      <button className="btn btn-secondary" style={{ padding: "4px 10px", fontSize: "var(--font-size-xs)" }} onClick={() => setEditingId(null)}>Cancel</button>
                     </div>
                   ) : (
                     <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", flexWrap: "wrap" }}>
-                      <h2 style={{ fontSize: "var(--font-size-base)", fontWeight: "var(--font-weight-semibold)", color: "var(--text-primary)", margin: 0 }}>
+                      <h2 style={{ fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-bold)", color: "var(--text-primary)", margin: 0 }}>
                         {ev.name}
                       </h2>
                       {ev.isActive && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "#f0fdf4", color: "var(--color-success)", border: "1px solid #bbf7d0", borderRadius: "var(--radius-full)", padding: "2px 8px", fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-semibold)" }}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--color-success)", display: "inline-block" }} />
+                        <span className="chip chip-success">
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
                           Active
                         </span>
                       )}
                       {isLoaded && (
-                        <span style={{ background: "var(--color-primary)", color: "white", borderRadius: "var(--radius-full)", padding: "2px 8px", fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-semibold)" }}>
+                        <span className="chip" style={{ background: "var(--color-primary)", color: "white" }}>
                           Loaded
                         </span>
                       )}
                     </div>
                   )}
 
-                  <div style={{ marginTop: "var(--space-xs)", fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
-                    {new Date(ev.createdAt).toLocaleDateString()} · {ev._count?.candidates ?? 0} candidates
-                  </div>
-
-                  <div style={{ display: "flex", gap: "var(--space-xs)", marginTop: "var(--space-sm)", flexWrap: "wrap" }}>
-                    <FeatureChip
-                      label="Connections"
-                      active={ev.featureVisualizer}
-                      editable={isAdmin && editingId !== ev.id}
-                      onToggle={() => handleToggleFeature(ev, "featureVisualizer")}
-                    />
-                    <FeatureChip
-                      label="Room Assignment"
-                      active={ev.featureRoomAssignment}
-                      editable={isAdmin && editingId !== ev.id}
-                      onToggle={() => handleToggleFeature(ev, "featureRoomAssignment")}
-                    />
+                  <div style={{ marginTop: "var(--space-xs)", fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
+                    Created {new Date(ev.createdAt).toLocaleDateString()} · <strong>{ev._count?.candidates ?? 0}</strong> candidates
                   </div>
                 </div>
 
                 {/* Actions */}
-                <div style={{ display: "flex", gap: "var(--space-sm)", flexShrink: 0, alignItems: "center" }}>
-                  {!isLoaded && (
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => handleLoad(ev)}
-                      disabled={!!switching}
-                      style={{ fontSize: "var(--font-size-xs)", padding: "6px 12px" }}
-                    >
-                      {isSwitching ? "Loading…" : "Load"}
-                    </button>
-                  )}
+                <div style={{ display: "flex", gap: "var(--space-xs)", flexShrink: 0, alignItems: "center" }}>
                   {isAdmin && editingId !== ev.id && (
                     <button
-                      className="btn btn-secondary"
+                      className="btn btn-ghost btn-sm"
                       onClick={() => { setEditingId(ev.id); setEditName(ev.name); }}
-                      style={{ fontSize: "var(--font-size-xs)", padding: "6px 10px" }}
                       title="Rename"
                     >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                       </svg>
@@ -250,20 +227,55 @@ export default function EventsClient({ isAdmin }: { isAdmin: boolean }) {
                   )}
                   {isAdmin && (
                     <button
-                      className="btn btn-secondary"
+                      className="btn btn-ghost btn-sm"
                       onClick={() => handleDelete(ev)}
                       disabled={isDeleting}
-                      style={{ fontSize: "var(--font-size-xs)", padding: "6px 10px", color: "var(--color-danger)" }}
+                      style={{ color: "var(--color-danger)" }}
                       title="Delete event"
                     >
                       {isDeleting ? "…" : (
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
                         </svg>
                       )}
                     </button>
                   )}
                 </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-md)", marginTop: "auto" }}>
+                <div style={{ display: "flex", gap: "var(--space-xs)", flexWrap: "wrap" }}>
+                  <FeatureChip
+                    label="Connections"
+                    active={ev.featureVisualizer}
+                    editable={isAdmin && editingId !== ev.id}
+                    onToggle={() => handleToggleFeature(ev, "featureVisualizer")}
+                  />
+                  <FeatureChip
+                    label="Rooms"
+                    active={ev.featureRoomAssignment}
+                    editable={isAdmin && editingId !== ev.id}
+                    onToggle={() => handleToggleFeature(ev, "featureRoomAssignment")}
+                  />
+                </div>
+
+                {!isLoaded ? (
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleLoad(ev)}
+                    disabled={!!switching}
+                    style={{ padding: "8px 16px" }}
+                  >
+                    {isSwitching ? "Loading…" : "Load Event"}
+                  </button>
+                ) : (
+                  <div style={{ color: "var(--color-primary)", fontWeight: "var(--font-weight-bold)", fontSize: "var(--font-size-sm)", display: "flex", alignItems: "center", gap: 4 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Active
+                  </div>
+                )}
               </div>
             </div>
           );
