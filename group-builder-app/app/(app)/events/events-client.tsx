@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useApp } from "@/lib/store";
 import { useTerms } from "@/lib/use-terms";
 import type { Event } from "@/types";
@@ -12,6 +12,7 @@ interface EventWithCount extends Event {
 
 export default function EventsClient({ isAdmin }: { isAdmin: boolean }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { event: currentEvent, setEvent, loadEventData } = useApp();
   const terms = useTerms();
 
@@ -26,6 +27,14 @@ export default function EventsClient({ isAdmin }: { isAdmin: boolean }) {
   useEffect(() => {
     fetchEvents();
   }, []);
+
+  // Auto-load a newly created event when redirected from setup
+  useEffect(() => {
+    const loadId = searchParams.get("load");
+    if (!loadId || loading) return;
+    const target = events.find((e) => e.id === loadId);
+    if (target) handleLoad(target);
+  }, [loading, events]);
 
   async function fetchEvents() {
     setLoading(true);

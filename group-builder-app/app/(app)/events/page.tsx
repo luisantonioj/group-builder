@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import EventsClient from "./events-client";
@@ -9,5 +10,9 @@ export default async function EventsPage() {
   const user = session.user as { role?: string };
   if (user.role !== "ADMIN") redirect("/dashboard");
 
-  return <EventsClient isAdmin />;
+  return (
+    <Suspense>
+      <EventsClient isAdmin />
+    </Suspense>
+  );
 }

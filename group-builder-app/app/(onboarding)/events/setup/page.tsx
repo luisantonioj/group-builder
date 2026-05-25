@@ -2,12 +2,12 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { Event } from "@/types";
 
 function EventSetupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isOnboarding = searchParams.get("onboarding") === "true";
-
   const [name, setName] = useState("");
   const [featureVisualizer, setFeatureVisualizer] = useState(true);
   const [featureRoomAssignment, setFeatureRoomAssignment] = useState(true);
@@ -25,12 +25,13 @@ function EventSetupForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), featureVisualizer, featureRoomAssignment, isActive: true }),
       });
+      const data = await res.json() as { data?: Event; error?: string };
       if (!res.ok) {
-        const data = await res.json() as { error?: string };
         setError(data.error ?? "Failed to create event.");
         return;
       }
-      router.push("/dashboard");
+      const id = data.data?.id;
+      router.push(id ? `/events?load=${id}` : "/dashboard");
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
