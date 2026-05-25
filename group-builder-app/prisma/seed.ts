@@ -32,10 +32,10 @@ async function main() {
       orgId: BLD_ORG_ID,
       termCandidate: "Lamb",
       termGroup: "Kordero",
-      termBatch: "YE Batch",
+      termEvent: "YE Batch",
       termShepherd: "Shepherd",
       termHeadShepherd: "Head Shepherd",
-      features: { roomAssignment: true, visualizer: true, importExcel: true },
+      features: { importExcel: true },
     },
   });
   console.log(`✅ OrgConfig for BLD`);
@@ -55,13 +55,13 @@ async function main() {
   });
   console.log(`✅ Admin user: ${admin.email}`);
 
-  // Create sample batch
-  const batch = await prisma.batch.upsert({
+  // Create sample event
+  const event = await prisma.event.upsert({
     where: { name_orgId: { name: "YE #19", orgId: BLD_ORG_ID } },
-    update: { isActive: true },
-    create: { name: "YE #19", isActive: true, orgId: BLD_ORG_ID },
+    update: { isActive: true, featureVisualizer: true, featureRoomAssignment: true },
+    create: { name: "YE #19", isActive: true, featureVisualizer: true, featureRoomAssignment: true, orgId: BLD_ORG_ID },
   });
-  console.log(`✅ Batch: ${batch.name}`);
+  console.log(`✅ Event: ${event.name}`);
 
   // Create default groups
   const groupNames = ["Kordero 1", "Kordero 2", "Kordero 3", "Kordero 4"];
@@ -73,7 +73,7 @@ async function main() {
         id: name.toLowerCase().replace(" ", "-"),
         name,
         capacity: 12,
-        batchId: batch.id,
+        eventId: event.id,
       },
     }).catch(() => {});
   }
@@ -90,7 +90,7 @@ async function main() {
   ];
   for (const r of roomDefs) {
     await prisma.room.create({
-      data: { ...r, gender: r.gender as "MALE" | "FEMALE", batchId: batch.id },
+      data: { ...r, gender: r.gender as "MALE" | "FEMALE", eventId: event.id },
     }).catch(() => {});
   }
   console.log(`✅ Created ${roomDefs.length} default rooms`);

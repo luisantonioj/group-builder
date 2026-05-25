@@ -33,7 +33,7 @@ import Modal from "@/components/ui/modal";
 import type { Candidate, Group } from "@/types";
 
 export default function GroupsPage() {
-  const { candidates, connections, groups, adjacency, groupConflicts, assignToGroup, autoDistribute, clearAllGroups, addGroup, deleteGroup, updateGroup, lockGroup, reorderGroups } = useApp();
+  const { candidates, connections, groups, adjacency, groupConflicts, assignToGroup, autoDistribute, clearAllGroups, addGroup, deleteGroup, updateGroup, lockGroup, reorderGroups, event } = useApp();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -234,7 +234,7 @@ export default function GroupsPage() {
         label: null,
         capacity: 12,
         isLocked: false,
-        batchId: "batch-ye19",
+        eventId: event.id,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });

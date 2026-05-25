@@ -6,16 +6,16 @@ export async function GET(req: NextRequest) {
   const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const batchId = req.nextUrl.searchParams.get("batchId");
+  const eventId = req.nextUrl.searchParams.get("eventId");
   try {
     const connections = await prisma.connection.findMany({
       where: {
-        from: { batch: { orgId: session.orgId } },
-        ...(batchId ? { from: { batchId, batch: { orgId: session.orgId } } } : {}),
+        from: { event: { orgId: session.orgId } },
+        ...(eventId ? { from: { eventId, event: { orgId: session.orgId } } } : {}),
       },
       include: {
-        from: { select: { id: true, fullName: true, gender: true, batchId: true } },
-        to:   { select: { id: true, fullName: true, gender: true, batchId: true } },
+        from: { select: { id: true, fullName: true, gender: true, eventId: true } },
+        to:   { select: { id: true, fullName: true, gender: true, eventId: true } },
       },
     });
     return NextResponse.json({ data: connections });
@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
   try {
     // Verify both candidates belong to this org
     const [fromCand, toCand] = await Promise.all([
-      prisma.candidate.findFirst({ where: { id: body.fromId, batch: { orgId: session.orgId } } }),
-      prisma.candidate.findFirst({ where: { id: body.toId,   batch: { orgId: session.orgId } } }),
+      prisma.candidate.findFirst({ where: { id: body.fromId, event: { orgId: session.orgId } } }),
+      prisma.candidate.findFirst({ where: { id: body.toId,   event: { orgId: session.orgId } } }),
     ]);
     if (!fromCand || !toCand) {
       return NextResponse.json({ error: "Candidate not found" }, { status: 404 });
@@ -54,7 +54,7 @@ export async function DELETE(req: NextRequest) {
   try {
     // Verify the connection belongs to this org before deleting
     const conn = await prisma.connection.findFirst({
-      where: { id, from: { batch: { orgId: session.orgId } } },
+      where: { id, from: { event: { orgId: session.orgId } } },
     });
     if (!conn) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

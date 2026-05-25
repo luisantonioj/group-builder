@@ -7,7 +7,7 @@ import { formatRelativeTime, pluralize } from "@/lib/utils";
 import { Chip } from "@/components/ui/chip";
 
 export default function DashboardPage() {
-  const { candidates, groups, rooms, activities, allConflicts, batch } = useApp();
+  const { candidates, groups, rooms, activities, allConflicts, event: batch } = useApp();
 
   const stats = useMemo(() => {
     const total = candidates.length;

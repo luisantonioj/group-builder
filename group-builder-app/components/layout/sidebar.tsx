@@ -7,13 +7,16 @@ import { cn } from "@/lib/utils";
 import { useSidebarState } from "@/lib/sidebar-state";
 import { useOrg } from "@/lib/org-context";
 import { useTerms } from "@/lib/use-terms";
-import type { OrgFeatures } from "@/types";
+import { useApp } from "@/lib/store";
 
 interface SidebarProps {
   user: { name: string; role: string };
 }
 
-function buildNavItems(features: OrgFeatures) {
+function buildNavItems(
+  eventFeatures: { featureVisualizer: boolean; featureRoomAssignment: boolean },
+  isAdmin: boolean
+) {
   return [
     {
       section: "Overview",
@@ -23,7 +26,7 @@ function buildNavItems(features: OrgFeatures) {
       section: "Candidate Data",
       items: [
         { href: "/masterlist", label: "Masterlist", icon: "users" },
-        ...(features.visualizer
+        ...(eventFeatures.featureVisualizer
           ? [{ href: "/visualizer", label: "Connections", icon: "network" }]
           : []),
       ],
@@ -32,7 +35,7 @@ function buildNavItems(features: OrgFeatures) {
       section: "Planning",
       items: [
         { href: "/groups", label: "Group Formation", icon: "grid" },
-        ...(features.roomAssignment
+        ...(eventFeatures.featureRoomAssignment
           ? [{ href: "/rooms", label: "Room Assignment", icon: "bed" }]
           : []),
       ],
@@ -41,6 +44,14 @@ function buildNavItems(features: OrgFeatures) {
       section: "Output",
       items: [{ href: "/reports", label: "Reports & Export", icon: "file" }],
     },
+    ...(isAdmin
+      ? [
+          {
+            section: "Others",
+            items: [{ href: "/events", label: "All Events", icon: "calendar" }],
+          },
+        ]
+      : []),
   ];
 }
 
@@ -70,6 +81,8 @@ function NavIcon({ name }: { name: string }) {
       return <svg {...ICON_PROPS}><path d="M2 4v16" /><path d="M2 8h18a2 2 0 0 1 2 2v10" /><path d="M2 17h20" /><path d="M6 8v9" /></svg>;
     case "file":
       return <svg {...ICON_PROPS}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>;
+    case "calendar":
+      return <svg {...ICON_PROPS}><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>;
     default:
       return null;
   }
@@ -78,10 +91,15 @@ function NavIcon({ name }: { name: string }) {
 export default function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const { collapsed, mobileOpen, toggleCollapsed, closeMobile } = useSidebarState();
-  const { orgName, config } = useOrg();
+  const { orgName } = useOrg();
   const terms = useTerms();
+  const { event } = useApp();
 
-  const navItems = buildNavItems(config.features);
+  const isAdmin = user.role === "ADMIN";
+  const navItems = buildNavItems(
+    { featureVisualizer: event.featureVisualizer, featureRoomAssignment: event.featureRoomAssignment },
+    isAdmin
+  );
 
   function roleLabel(role: string) {
     if (role === "ADMIN") return terms.headShepherd;

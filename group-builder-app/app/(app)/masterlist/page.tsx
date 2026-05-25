@@ -104,7 +104,7 @@ interface ImportModalData {
 }
 
 export default function MasterlistPage() {
-  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, importCandidates, addConnection, deleteConnection, batch } = useApp();
+  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, importCandidates, addConnection, deleteConnection, event: batch } = useApp();
   const { showToast } = useToast();
 
   // Filters
@@ -263,7 +263,7 @@ export default function MasterlistPage() {
       motherName: null, motherContact: null,
       allergies: null, shepherdNotes: null,
       groupId: null, roomId: null,
-      batchId: batch.id,
+      eventId: batch.id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
@@ -353,7 +353,7 @@ export default function MasterlistPage() {
           motherContact: getRaw(row, "motherContact") || null,
           allergies: getRaw(row, "allergies") || null,
           shepherdNotes: null, groupId: null, roomId: null,
-          batchId: batch.id, createdAt: now, updatedAt: now,
+          eventId: batch.id, createdAt: now, updatedAt: now,
         };
       })
       .filter((c): c is Candidate => c !== null);
@@ -420,7 +420,7 @@ export default function MasterlistPage() {
       const res = await fetch("/api/candidates/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: sanitizedRows, mapping, batchId: batch.id }),
+        body: JSON.stringify({ rows: sanitizedRows, mapping, eventId: batch.id }),
       });
       const data = await res.json();
       if (res.ok) {

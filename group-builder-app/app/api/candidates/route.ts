@@ -26,7 +26,7 @@ const CreateSchema = z.object({
   shepherdNotes: z.string().nullable().optional(),
   groupId: z.string().nullable().optional(),
   roomId: z.string().nullable().optional(),
-  batchId: z.string(),
+  eventId: z.string(),
 });
 
 export async function GET(req: NextRequest) {
@@ -34,14 +34,14 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const batchId  = searchParams.get("batchId");
+  const eventId  = searchParams.get("eventId");
   const page     = parseInt(searchParams.get("page")     ?? "1");
   const pageSize = parseInt(searchParams.get("pageSize") ?? "100");
 
   try {
     const where = {
-      batch: { orgId: session.orgId },
-      ...(batchId ? { batchId } : {}),
+      event: { orgId: session.orgId },
+      ...(eventId ? { eventId } : {}),
     };
     const [candidates, total] = await Promise.all([
       prisma.candidate.findMany({
@@ -70,12 +70,12 @@ export async function POST(req: NextRequest) {
 
   const data = parsed.data;
 
-  // Verify the batch belongs to this org
+  // Verify the event belongs to this org
   try {
-    const batch = await prisma.batch.findFirst({
-      where: { id: data.batchId, orgId: session.orgId },
+    const event = await prisma.event.findFirst({
+      where: { id: data.eventId, orgId: session.orgId },
     });
-    if (!batch) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+    if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
   } catch {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
   // Check for duplicate within the same org
   if (contactHash) {
     const existing = await prisma.candidate.findFirst({
-      where: { contactHash, batch: { orgId: session.orgId } },
+      where: { contactHash, event: { orgId: session.orgId } },
     });
     if (existing) {
       return NextResponse.json({ error: "Duplicate contact number detected", existing }, { status: 409 });

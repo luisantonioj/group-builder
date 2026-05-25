@@ -59,7 +59,7 @@ model Organization {
   updatedAt DateTime   @updatedAt
 
   users   User[]
-  batches Batch[]
+  events  Event[]
   config  OrgConfig?
 }
 
@@ -70,10 +70,10 @@ model OrgConfig {
   orgId            String  @unique
   termCandidate    String? // BLD: "Lamb"          | generic: "Participant"
   termGroup        String? // BLD: "Kordero"        | generic: "Group"
-  termBatch        String? // BLD: "YE Batch"       | generic: "Event"
+  termEvent        String? // BLD: "YE Batch"       | generic: "Event"
   termShepherd     String? // BLD: "Shepherd"       | generic: "Facilitator"
   termHeadShepherd String? // BLD: "Head Shepherd"  | generic: "Admin"
-  features         Json    @default("{}") // { roomAssignment, visualizer, importExcel }
+  features         Json    @default("{}") // { importExcel }
   primaryColor     String?
   logoUrl          String?
 
@@ -99,14 +99,16 @@ model User {
   @@index([orgId])
 }
 
-// ─── Batch ────────────────────────────────────────────────────────────────────
+// ─── Event ────────────────────────────────────────────────────────────────────
 
-model Batch {
-  id         String      @id @default(cuid())
-  name       String      // e.g. "YE #19"
-  isActive   Boolean     @default(false)
-  orgId      String?
-  createdAt  DateTime    @default(now())
+model Event {
+  id                   String      @id @default(cuid())
+  name                 String      // e.g. "YE #19"
+  isActive             Boolean     @default(false)
+  featureVisualizer    Boolean     @default(false)
+  featureRoomAssignment Boolean    @default(false)
+  orgId                String?
+  createdAt            DateTime    @default(now())
 
   org        Organization? @relation(fields: [orgId], references: [id])
   candidates Candidate[]
@@ -153,9 +155,9 @@ model Candidate {
   // Assignments
   groupId String?
   roomId  String?
-  batchId String
+  eventId String
 
-  batch           Batch        @relation(fields: [batchId], references: [id])
+  event           Event        @relation(fields: [eventId], references: [id])
   group           Group?       @relation(fields: [groupId], references: [id])
   room            Room?        @relation(fields: [roomId], references: [id])
   connectionsFrom Connection[] @relation("FromCandidate")
@@ -164,7 +166,7 @@ model Candidate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([batchId])
+  @@index([eventId])
   @@index([contactHash])
   @@index([groupId])
   @@index([roomId])
@@ -197,16 +199,16 @@ model Group {
   label    String? // optional alias
   capacity Int     @default(12)
   isLocked Boolean @default(false)
-  batchId  String
+  eventId  String
 
-  batch      Batch       @relation(fields: [batchId], references: [id])
+  event      Event       @relation(fields: [eventId], references: [id])
   candidates Candidate[]
   conflicts  Conflict[]  @relation("GroupConflicts")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([batchId])
+  @@index([eventId])
 }
 
 // ─── Room ─────────────────────────────────────────────────────────────────────
@@ -219,16 +221,16 @@ model Room {
   capacity Int
   bedCount Int
   gender   RoomGender
-  batchId  String
+  eventId  String
 
-  batch      Batch       @relation(fields: [batchId], references: [id])
+  event      Event       @relation(fields: [eventId], references: [id])
   candidates Candidate[]
   conflicts  Conflict[]  @relation("RoomConflicts")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([batchId])
+  @@index([eventId])
 }
 
 // ─── Conflict ─────────────────────────────────────────────────────────────────

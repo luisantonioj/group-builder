@@ -24,7 +24,7 @@ export interface OrgFeatures {
 export interface OrgConfig {
   termCandidate: string;
   termGroup: string;
-  termBatch: string;
+  termEvent: string;
   termShepherd: string;
   termHeadShepherd: string;
   features: OrgFeatures;
@@ -53,12 +53,14 @@ export interface User {
   isBldOrg: boolean;
 }
 
-// ─── Batch ────────────────────────────────────────────────────────────────────
+// ─── Event ────────────────────────────────────────────────────────────────────
 
-export interface Batch {
+export interface Event {
   id: string;
   name: string;
   isActive: boolean;
+  featureVisualizer: boolean;
+  featureRoomAssignment: boolean;
   createdAt: string;
 }
 
@@ -92,7 +94,7 @@ export interface Candidate {
   // Assignments
   groupId: string | null;
   roomId: string | null;
-  batchId: string;
+  eventId: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -125,7 +127,7 @@ export interface Group {
   label: string | null;
   capacity: number;
   isLocked: boolean;
-  batchId: string;
+  eventId: string;
   candidates?: Candidate[];
   conflictCount?: number;
   createdAt: string;
@@ -142,7 +144,7 @@ export interface Room {
   capacity: number;
   bedCount: number;
   gender: RoomGender;
-  batchId: string;
+  eventId: string;
   candidates?: Candidate[];
   conflictCount?: number;
   createdAt: string;

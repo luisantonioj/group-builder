@@ -51,10 +51,10 @@ export async function POST(req: NextRequest) {
           orgId:            org.id,
           termCandidate:    "Participant",
           termGroup:        "Group",
-          termBatch:        "Event",
+          termEvent:        "Event",
           termShepherd:     "Facilitator",
           termHeadShepherd: "Admin",
-          features: { roomAssignment: true, visualizer: true, importExcel: true },
+          features: { importExcel: true },
         },
       });
 

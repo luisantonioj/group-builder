@@ -8,7 +8,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   try {
     const candidate = await prisma.candidate.findFirst({
-      where: { id: params.id, batch: { orgId: session.orgId } },
+      where: { id: params.id, event: { orgId: session.orgId } },
     });
     if (!candidate) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json({ data: candidate });
@@ -25,7 +25,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   try {
     // Verify ownership before update
     const existing = await prisma.candidate.findFirst({
-      where: { id: params.id, batch: { orgId: session.orgId } },
+      where: { id: params.id, event: { orgId: session.orgId } },
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -49,7 +49,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   try {
     const existing = await prisma.candidate.findFirst({
-      where: { id: params.id, batch: { orgId: session.orgId } },
+      where: { id: params.id, event: { orgId: session.orgId } },
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

@@ -26,7 +26,7 @@ import type { Candidate, Room, Gender, RoomGender } from "@/types";
 type GenderTab = "MALE" | "FEMALE";
 
 export default function RoomsPage() {
-  const { candidates, connections, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom } = useApp();
+  const { candidates, connections, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom, event } = useApp();
   const { showToast } = useToast();
 
   const [genderTab, setGenderTab] = useState<GenderTab>("MALE");
@@ -147,7 +147,7 @@ export default function RoomsPage() {
       id: `r${Date.now()}`,
       ...newRoom,
       building: null,
-      batchId: "batch-ye19",
+      eventId: event.id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });

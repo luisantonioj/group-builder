@@ -23,22 +23,22 @@ export async function POST(req: NextRequest) {
   const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json() as { rows: ImportRow[]; mapping: ColumnMapping; batchId: string };
-  const { rows, mapping, batchId } = body;
+  const body = await req.json() as { rows: ImportRow[]; mapping: ColumnMapping; eventId: string };
+  const { rows, mapping, eventId } = body;
 
-  if (!rows?.length || !batchId) {
-    return NextResponse.json({ error: "rows and batchId required" }, { status: 400 });
+  if (!rows?.length || !eventId) {
+    return NextResponse.json({ error: "rows and eventId required" }, { status: 400 });
   }
 
   if (rows.length > MAX_ROWS) {
     return NextResponse.json({ error: `Maximum ${MAX_ROWS} rows per import` }, { status: 400 });
   }
 
-  // Verify batch belongs to this org
-  const batch = await prisma.batch.findFirst({ where: { id: batchId, orgId: session.orgId } });
-  if (!batch) return NextResponse.json({ error: "Batch not found" }, { status: 404 });
+  // Verify event belongs to this org
+  const event = await prisma.event.findFirst({ where: { id: eventId, orgId: session.orgId } });
+  if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
 
-  const existingCandidates = await prisma.candidate.findMany({ where: { batchId } });
+  const existingCandidates = await prisma.candidate.findMany({ where: { eventId } });
   const results = { created: 0, skipped: 0, duplicates: [] as string[] };
 
   for (const row of rows) {
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
           school: sanitize(col("school")) || null,
           inviterName: inviterRaw,
           howHeard: sanitize(col("howHeard")) || null,
-          yeBatch: batchId,
+          yeBatch: eventId,
           birthdayEnc: encField(col("birthday")),
           addressEnc: encField(col("address")),
           facebookEnc: encField(col("facebook")),
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
           fatherContactEnc: encField(col("fatherContact")),
           motherNameEnc: encField(col("motherName")),
           motherContactEnc: encField(col("motherContact")),
-          batchId,
+          eventId,
         },
       });
 

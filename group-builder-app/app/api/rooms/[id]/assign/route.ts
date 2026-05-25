@@ -11,7 +11,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const room = await prisma.room.findFirst({
-      where: { id: params.id, batch: { orgId: session.orgId } },
+      where: { id: params.id, event: { orgId: session.orgId } },
       include: { candidates: true },
     });
     if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const candidate = await prisma.candidate.findFirst({
-      where: { id: candidateId, batch: { orgId: session.orgId } },
+      where: { id: candidateId, event: { orgId: session.orgId } },
     });
     if (!candidate) return NextResponse.json({ error: "Candidate not found" }, { status: 404 });
 

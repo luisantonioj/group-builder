@@ -3,7 +3,7 @@ import type { OrgConfig } from "@/types";
 export const BLD_CONFIG: OrgConfig = {
   termCandidate:    "Lamb",
   termGroup:        "Kordero",
-  termBatch:        "YE Batch",
+  termEvent:        "YE Batch",
   termShepherd:     "Shepherd",
   termHeadShepherd: "Head Shepherd",
   features: {
@@ -18,7 +18,7 @@ export const BLD_CONFIG: OrgConfig = {
 export const GENERIC_CONFIG: OrgConfig = {
   termCandidate:    "Participant",
   termGroup:        "Group",
-  termBatch:        "Event",
+  termEvent:        "Event",
   termShepherd:     "Facilitator",
   termHeadShepherd: "Admin",
   features: {

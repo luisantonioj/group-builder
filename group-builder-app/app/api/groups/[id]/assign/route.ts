@@ -11,7 +11,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   try {
     const group = await prisma.group.findFirst({
-      where: { id: params.id, batch: { orgId: session.orgId } },
+      where: { id: params.id, event: { orgId: session.orgId } },
       include: { candidates: true },
     });
     if (!group) return NextResponse.json({ error: "Group not found" }, { status: 404 });

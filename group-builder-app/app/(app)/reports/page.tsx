@@ -8,7 +8,7 @@ import Initials from "@/components/ui/initials";
 type ReportTab = "groups" | "rooms" | "conflicts" | "allergies" | "contacts";
 
 export default function ReportsPage() {
-  const { candidates, groups, rooms, allConflicts, connections, batch } = useApp();
+  const { candidates, groups, rooms, allConflicts, connections, event: batch } = useApp();
   const [tab, setTab] = useState<ReportTab>("groups");
 
   const totalCandidates = candidates.length;

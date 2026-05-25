@@ -12,18 +12,18 @@ export async function GET(req: NextRequest) {
 
   if (session.userRole === "VIEWER") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const batchId = req.nextUrl.searchParams.get("batchId");
+  const eventId = req.nextUrl.searchParams.get("eventId");
   const format  = req.nextUrl.searchParams.get("format") ?? "json";
 
   try {
-    const orgWhere = { batch: { orgId: session.orgId } };
-    const batchFilter = batchId ? { batchId } : {};
+    const orgWhere = { event: { orgId: session.orgId } };
+    const eventFilter = eventId ? { eventId } : {};
 
     const [candidates, groups, rooms, connections] = await Promise.all([
-      prisma.candidate.findMany({ where: { ...orgWhere, ...batchFilter }, orderBy: { fullName: "asc" } }),
-      prisma.group.findMany({ where: { ...orgWhere, ...batchFilter } }),
-      prisma.room.findMany({ where: { ...orgWhere, ...batchFilter } }),
-      prisma.connection.findMany({ where: { from: { batch: { orgId: session.orgId } } } }),
+      prisma.candidate.findMany({ where: { ...orgWhere, ...eventFilter }, orderBy: { fullName: "asc" } }),
+      prisma.group.findMany({ where: { ...orgWhere, ...eventFilter } }),
+      prisma.room.findMany({ where: { ...orgWhere, ...eventFilter } }),
+      prisma.connection.findMany({ where: { from: { event: { orgId: session.orgId } } } }),
     ]);
 
     const payload = { candidates, groups, rooms, connections, exportedAt: new Date().toISOString() };

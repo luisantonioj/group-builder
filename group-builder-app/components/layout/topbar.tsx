@@ -63,7 +63,7 @@ export default function Topbar() {
   const { openMobile } = useSidebarState();
   const router = useRouter();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { batch } = useApp();
+  const { event } = useApp();
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -88,9 +88,9 @@ export default function Topbar() {
         </button>
 
         <span className="topbar-batch-info" style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>
-          {batch.name} · {batch.isActive ? "Active" : "Inactive"}
+          {event.name} · {event.isActive ? "Active" : "Inactive"}
         </span>
-        {batch.isActive && (
+        {event.isActive && (
           <span
             style={{
               display: "inline-flex",

@@ -7,7 +7,7 @@ export function useTerms() {
   return {
     candidate:    config.termCandidate,
     group:        config.termGroup,
-    batch:        config.termBatch,
+    event:        config.termEvent,
     shepherd:     config.termShepherd,
     headShepherd: config.termHeadShepherd,
   };

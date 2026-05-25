@@ -1,7 +1,7 @@
 "use client";
 
 // Client-side state store for the Grouping System.
-// Initialises with mock data so the app is immediately functional without a DB.
+// Initialises with the event passed from the server layout (or mock data in dev).
 // All mutations call the real API when available and update local state optimistically.
 
 import {
@@ -19,13 +19,13 @@ import {
   autoDistribute as autoDistributeImpl,
   deriveAutoConnections,
 } from "./conflict-detection";
-import type { Candidate, Connection, Group, Room, Activity, Batch, Conflict } from "@/types";
+import type { Candidate, Connection, Group, Room, Activity, Event, Conflict } from "@/types";
 import { enqueueSync } from "./dexie";
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
 interface AppState {
-  batch: Batch;
+  event: Event;
   candidates: Candidate[];
   connections: Connection[];
   groups: Group[];
@@ -34,7 +34,12 @@ interface AppState {
 }
 
 type Action =
+  | { type: "SET_EVENT"; payload: Event }
+  | { type: "SET_APP_DATA"; payload: Partial<AppState> }
   | { type: "SET_CANDIDATES"; payload: Candidate[] }
+  | { type: "SET_GROUPS"; payload: Group[] }
+  | { type: "SET_ROOMS"; payload: Room[] }
+  | { type: "SET_CONNECTIONS"; payload: Connection[] }
   | { type: "ADD_CANDIDATE"; payload: Candidate }
   | { type: "UPDATE_CANDIDATE"; payload: Candidate }
   | { type: "DELETE_CANDIDATE"; payload: string }
@@ -51,10 +56,37 @@ type Action =
   | { type: "LOCK_GROUP"; payload: { groupId: string; locked: boolean } }
   | { type: "REORDER_GROUPS"; payload: string[] };
 
+const EMPTY_EVENT: Event = {
+  id: "",
+  name: "No event",
+  isActive: false,
+  featureVisualizer: false,
+  featureRoomAssignment: false,
+  createdAt: "",
+};
+
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case "SET_EVENT":
+      return {
+        ...state,
+        event: action.payload,
+        candidates: [],
+        connections: [],
+        groups: [],
+        rooms: [],
+        activities: [],
+      };
+    case "SET_APP_DATA":
+      return { ...state, ...action.payload };
     case "SET_CANDIDATES":
       return { ...state, candidates: action.payload };
+    case "SET_GROUPS":
+      return { ...state, groups: action.payload };
+    case "SET_ROOMS":
+      return { ...state, rooms: action.payload };
+    case "SET_CONNECTIONS":
+      return { ...state, connections: action.payload };
     case "ADD_CANDIDATE":
       return { ...state, candidates: [action.payload, ...state.candidates] };
     case "UPDATE_CANDIDATE":
@@ -141,6 +173,29 @@ function reducer(state: AppState, action: Action): AppState {
   }
 }
 
+function buildInitialState(initialEvent: Event | null): AppState {
+  if (!initialEvent) {
+    if (process.env.NODE_ENV === "development") {
+      return getMockInitialState();
+    }
+    return {
+      event: EMPTY_EVENT,
+      candidates: [],
+      connections: [],
+      groups: [],
+      rooms: [],
+      activities: [],
+    };
+  }
+  return {
+    event: initialEvent,
+    candidates: [],
+    connections: [],
+    groups: [],
+    rooms: [],
+    activities: [],
+  };
+}
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -150,6 +205,9 @@ interface AppContextValue extends AppState {
   groupConflicts: Omit<Conflict, "id" | "createdAt">[];
   roomConflicts: Omit<Conflict, "id" | "createdAt">[];
   allConflicts: Omit<Conflict, "id" | "createdAt">[];
+  // Event management
+  setEvent: (event: Event) => void;
+  loadEventData: (eventId: string) => Promise<void>;
   // Mutations
   addCandidate: (candidate: Candidate) => void;
   updateCandidate: (candidate: Candidate) => void;
@@ -174,14 +232,14 @@ const AppContext = createContext<AppContextValue>(null!);
 
 export function AppProvider({
   children,
-  isBld = true,
+  initialEvent = null,
   currentUser = { id: "demo-admin", name: "Shepherd" },
 }: {
   children: React.ReactNode;
-  isBld?: boolean;
+  initialEvent?: Event | null;
   currentUser?: { id: string; name: string };
 }) {
-  const [state, dispatch] = useReducer(reducer, getMockInitialState(isBld));
+  const [state, dispatch] = useReducer(reducer, buildInitialState(initialEvent));
 
   const autoConnections = useMemo(
     () => deriveAutoConnections(state.candidates),
@@ -234,6 +292,32 @@ export function AppProvider({
       },
     });
   }, [currentUser]);
+
+  const setEvent = useCallback((event: Event) => {
+    dispatch({ type: "SET_EVENT", payload: event });
+  }, []);
+
+  const loadEventData = useCallback(async (eventId: string) => {
+    try {
+      const [candidatesRes, groupsRes, roomsRes, connectionsRes] = await Promise.allSettled([
+        fetch(`/api/candidates?eventId=${eventId}`).then((r) => r.json()),
+        fetch(`/api/groups?eventId=${eventId}`).then((r) => r.json()),
+        fetch(`/api/rooms?eventId=${eventId}`).then((r) => r.json()),
+        fetch(`/api/connections?eventId=${eventId}`).then((r) => r.json()),
+      ]);
+      dispatch({
+        type: "SET_APP_DATA",
+        payload: {
+          candidates:  candidatesRes.status  === "fulfilled" ? (candidatesRes.value.data  ?? []) : [],
+          groups:      groupsRes.status      === "fulfilled" ? (groupsRes.value.data      ?? []) : [],
+          rooms:       roomsRes.status       === "fulfilled" ? (roomsRes.value.data       ?? []) : [],
+          connections: connectionsRes.status === "fulfilled" ? (connectionsRes.value.data ?? []) : [],
+        },
+      });
+    } catch {
+      // Silently ignore network errors — app stays with current state
+    }
+  }, []);
 
   const addCandidate = useCallback((candidate: Candidate) => {
     dispatch({ type: "ADD_CANDIDATE", payload: candidate });
@@ -352,6 +436,8 @@ export function AppProvider({
     groupConflicts,
     roomConflicts,
     allConflicts,
+    setEvent,
+    loadEventData,
     addCandidate,
     updateCandidate,
     deleteCandidate,
