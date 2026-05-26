@@ -42,6 +42,19 @@ export function normalizeName(name: string): string {
     .trim();
 }
 
+// Returns true if all words of the shorter name appear in the longer name's word set.
+// Requires ≥ 2 words in the shorter to avoid single-word last-name false positives.
+// This catches middle-name insertions: "Ariane Cauyan" ↔ "Ariane Mae Cauyan".
+function wordsContained(a: string, b: string): boolean {
+  const toWords = (s: string) =>
+    normalizeName(s).split(/\s+/).filter((w) => w.replace(/[^a-z]/g, "").length >= 2);
+  const wa = toWords(a);
+  const wb = toWords(b);
+  const [smaller, larger] = wa.length <= wb.length ? [wa, new Set(wb)] : [wb, new Set(wa)];
+  if (smaller.length < 2) return false;
+  return smaller.every((w) => (larger as Set<string>).has(w));
+}
+
 // Group candidates by shared inviter name, clustering fuzzy-similar inviter strings together.
 // Returns only groups with ≥ 2 candidates (i.e., actual co-invitee pairs/sets).
 export function groupBySharedInviter(
@@ -68,6 +81,16 @@ export function groupBySharedInviter(
     parent.set(find(a), find(b));
   }
 
+  // Pass 1: word-containment — catches middle-name variants without edit-distance penalty
+  for (let i = 0; i < uniqueNames.length; i++) {
+    for (let j = i + 1; j < uniqueNames.length; j++) {
+      if (wordsContained(uniqueNames[i], uniqueNames[j])) {
+        union(uniqueNames[i], uniqueNames[j]);
+      }
+    }
+  }
+
+  // Pass 2: fuzzy similarity — catches typos and diacritic/spelling variants
   const fuseNames = uniqueNames.map((n) => ({ name: n }));
   const fuse = new Fuse(fuseNames, {
     keys: ["name"],
@@ -96,14 +119,18 @@ export function groupBySharedInviter(
     cluster.candidates.push(c);
   }
 
-  // Pick the most common (or first) name in the cluster as canonical
+  // Pick the most complete (most words, then most frequent) name as canonical
   return [...clusters.values()]
     .filter((v) => v.candidates.length >= 2)
     .map((v) => {
       const freq = new Map<string, number>();
       for (const n of v.names) freq.set(n, 0);
       for (const c of v.candidates) freq.set(c.inviterName!, (freq.get(c.inviterName!) ?? 0) + 1);
-      const canonicalName = [...freq.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      // Prefer longer (more complete) names; break ties by frequency
+      const canonicalName = [...freq.entries()].sort((a, b) => {
+        const wordDiff = b[0].split(/\s+/).length - a[0].split(/\s+/).length;
+        return wordDiff !== 0 ? wordDiff : b[1] - a[1];
+      })[0][0];
       return { canonicalName, candidates: v.candidates };
     });
 }
