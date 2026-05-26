@@ -3,7 +3,8 @@ import { requireOrgSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { hmac, encrypt } from "@/lib/crypto";
 import { fuzzyMatchInviter } from "@/lib/fuzzy-match";
-import type { ImportRow, ColumnMapping } from "@/types";
+import { deriveCoInviteeConnections } from "@/lib/conflict-detection";
+import type { ImportRow, ColumnMapping, Candidate } from "@/types";
 
 const MAX_ROWS = 500;
 
@@ -113,6 +114,27 @@ export async function POST(req: NextRequest) {
       results.created++;
     } catch {
       results.skipped++;
+    }
+  }
+
+  // Co-invitee scan: connect candidates who share the same inviter
+  const allCandidates = await prisma.candidate.findMany({ where: { eventId } });
+  const coConns = deriveCoInviteeConnections(allCandidates as unknown as Candidate[]);
+  for (const conn of coConns) {
+    try {
+      await prisma.connection.upsert({
+        where: { fromId_toId: { fromId: conn.fromId, toId: conn.toId } },
+        update: {},
+        create: {
+          fromId: conn.fromId,
+          toId: conn.toId,
+          relationshipType: conn.relationshipType,
+          source: "AUTO",
+          note: conn.note,
+        },
+      });
+    } catch {
+      // skip duplicate / constraint errors
     }
   }
 

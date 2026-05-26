@@ -41,3 +41,69 @@ export function normalizeName(name: string): string {
     .replace(/[^a-z0-9\s]/g, "")
     .trim();
 }
+
+// Group candidates by shared inviter name, clustering fuzzy-similar inviter strings together.
+// Returns only groups with ≥ 2 candidates (i.e., actual co-invitee pairs/sets).
+export function groupBySharedInviter(
+  candidates: Candidate[],
+  threshold = 0.7
+): { canonicalName: string; candidates: Candidate[] }[] {
+  const withInviter = candidates.filter(
+    (c) => c.inviterName && c.inviterName.trim().toLowerCase() !== "n/a"
+  );
+  if (withInviter.length < 2) return [];
+
+  const uniqueNames = [...new Set(withInviter.map((c) => c.inviterName!))];
+  if (uniqueNames.length === 1) {
+    return [{ canonicalName: uniqueNames[0], candidates: withInviter }];
+  }
+
+  // Union-Find over inviter name strings
+  const parent = new Map<string, string>(uniqueNames.map((n) => [n, n]));
+  function find(x: string): string {
+    if (parent.get(x) !== x) parent.set(x, find(parent.get(x)!));
+    return parent.get(x)!;
+  }
+  function union(a: string, b: string) {
+    parent.set(find(a), find(b));
+  }
+
+  const fuseNames = uniqueNames.map((n) => ({ name: n }));
+  const fuse = new Fuse(fuseNames, {
+    keys: ["name"],
+    includeScore: true,
+    threshold: 1 - threshold, // Fuse: 0 = perfect match; invert our threshold
+    ignoreLocation: true,
+  });
+
+  for (const name of uniqueNames) {
+    const results = fuse.search(name);
+    for (const r of results) {
+      const score = 1 - (r.score ?? 1);
+      if (score >= threshold && r.item.name !== name) {
+        union(name, r.item.name);
+      }
+    }
+  }
+
+  // Group candidates by cluster root
+  const clusters = new Map<string, { names: Set<string>; candidates: Candidate[] }>();
+  for (const c of withInviter) {
+    const root = find(c.inviterName!);
+    if (!clusters.has(root)) clusters.set(root, { names: new Set(), candidates: [] });
+    const cluster = clusters.get(root)!;
+    cluster.names.add(c.inviterName!);
+    cluster.candidates.push(c);
+  }
+
+  // Pick the most common (or first) name in the cluster as canonical
+  return [...clusters.values()]
+    .filter((v) => v.candidates.length >= 2)
+    .map((v) => {
+      const freq = new Map<string, number>();
+      for (const n of v.names) freq.set(n, 0);
+      for (const c of v.candidates) freq.set(c.inviterName!, (freq.get(c.inviterName!) ?? 0) + 1);
+      const canonicalName = [...freq.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      return { canonicalName, candidates: v.candidates };
+    });
+}

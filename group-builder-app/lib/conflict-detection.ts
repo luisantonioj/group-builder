@@ -1,5 +1,5 @@
 import type { Candidate, Connection, Conflict } from "@/types";
-import { fuzzyMatchInviter } from "./fuzzy-match";
+import { fuzzyMatchInviter, groupBySharedInviter } from "./fuzzy-match";
 
 // Build an adjacency map from a connection list for O(1) lookup
 export function buildAdjacencyMap(
@@ -156,6 +156,39 @@ export function deriveAutoConnections(candidates: Candidate[]): Connection[] {
       fromName: candidate.fullName,
       toName: match.candidate.fullName,
     });
+  }
+
+  return result;
+}
+
+// Derive AUTO connections between candidates who share the same inviter name.
+// Uses fuzzy clustering so "Juan Santos" / "Juan Sants" / "J. Santos" are treated as one group.
+export function deriveCoInviteeConnections(candidates: Candidate[]): Connection[] {
+  const result: Connection[] = [];
+  const seen = new Set<string>();
+
+  const groups = groupBySharedInviter(candidates);
+  for (const { canonicalName, candidates: group } of groups) {
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const [a, b] = [group[i].id, group[j].id].sort();
+        const key = `${a}:${b}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        result.push({
+          id: `co-invitee-${a}-${b}`,
+          fromId: group[i].id,
+          toId: group[j].id,
+          relationshipType: "CHURCHMATE",
+          source: "AUTO",
+          note: `Shared inviter: "${canonicalName}"`,
+          createdAt: group[i].createdAt,
+          fromName: group[i].fullName,
+          toName: group[j].fullName,
+        });
+      }
+    }
   }
 
   return result;
