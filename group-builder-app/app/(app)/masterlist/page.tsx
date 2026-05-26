@@ -49,7 +49,7 @@ function sanitizeCell(val: unknown): string {
 
 const SYSTEM_FIELDS: { key: string; label: string; required?: boolean }[] = [
   { key: "fullName",      label: "Full Name",      required: true },
-  { key: "gender",        label: "Gender",         required: true },
+  { key: "gender",        label: "Gender" },
   { key: "age",           label: "Age" },
   { key: "birthday",      label: "Birthday" },
   { key: "contact",       label: "Contact Number" },
@@ -313,50 +313,9 @@ export default function MasterlistPage() {
     }
   }
 
-  async function handleImportConfirm(mapping: Record<string, string>) {
+  async function handleImportConfirm(parsed: Candidate[], mapping: Record<string, string>) {
     if (!importModalData) return;
     setImporting(true);
-
-    const getRaw = (row: Record<string, unknown>, field: string): string => {
-      const col = mapping[field];
-      if (!col) return "";
-      const v = row[col];
-      return typeof v === "string" ? sanitizeCell(v) : v !== null && v !== undefined ? String(v) : "";
-    };
-
-    const now = new Date().toISOString();
-    const parsed = importModalData.rows
-      .map((row, i): Candidate | null => {
-        const fullName = getRaw(row, "fullName");
-        if (!fullName) return null;
-        const nameParts = fullName.split(",").map((s) => s.trim());
-        const lastName = nameParts[0] ?? fullName;
-        const firstName = nameParts[1] ?? "";
-        const genderRaw = getRaw(row, "gender").toUpperCase();
-        const gender: Gender = genderRaw === "F" || genderRaw === "FEMALE" ? "FEMALE" : "MALE";
-        const ageStr = getRaw(row, "age");
-        return {
-          id: `import-${Date.now()}-${i}`,
-          timestamp: now, fullName, lastName, firstName, gender,
-          age: ageStr ? parseInt(ageStr, 10) || null : null,
-          school: getRaw(row, "school") || null,
-          inviterName: getRaw(row, "inviterName") || null,
-          howHeard: getRaw(row, "howHeard") || null,
-          yeBatch: batch.name,
-          birthday: getRaw(row, "birthday") || null,
-          address: getRaw(row, "address") || null,
-          facebook: getRaw(row, "facebook") || null,
-          contact: getRaw(row, "contact") || null,
-          fatherName: getRaw(row, "fatherName") || null,
-          fatherContact: getRaw(row, "fatherContact") || null,
-          motherName: getRaw(row, "motherName") || null,
-          motherContact: getRaw(row, "motherContact") || null,
-          allergies: getRaw(row, "allergies") || null,
-          shepherdNotes: null, groupId: null, roomId: null,
-          eventId: batch.id, createdAt: now, updatedAt: now,
-        };
-      })
-      .filter((c): c is Candidate => c !== null);
 
     // ── Client-side duplicate detection ────────────────────────────────────────
     // Normalize helpers
@@ -401,12 +360,6 @@ export default function MasterlistPage() {
       return;
     }
 
-    const sanitizedRows = importModalData.rows.map((row) => {
-      const clean: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(row)) clean[k] = typeof v === "string" ? sanitizeCell(v) : v;
-      return clean;
-    });
-
     // Update local store with only fresh candidates
     importCandidates(freshCandidates);
     setImportModalData(null);
@@ -417,14 +370,38 @@ export default function MasterlistPage() {
     };
 
     try {
+      // For the server-side, we need to send the final parsed candidates or the original rows + mapping.
+      // Since we already did the review, it's better to send the final parsed list if the API supports it,
+      // but let's stick to the existing API contract for safety and just update the mapping if needed.
+      // Actually, the user might have changed Genders in the review step.
+      // We should update the API to handle the final parsed list or adjust the rows before sending.
+      // Let's send the rows but with an extra field if the API allows it, or just send the final objects.
+
+      // Re-map rows to include any gender changes from the review step if we were to stay with the current API.
+      // However, it's cleaner to just update the rows in memory.
+      const sanitizedRows = importModalData.rows.map((row, idx) => {
+        const clean: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(row)) clean[k] = typeof v === "string" ? sanitizeCell(v) : v;
+        // Inject the chosen gender back into the row so the API picks it up
+        const finalCandidate = parsed[idx];
+        if (finalCandidate) {
+          const genderCol = mapping["gender"] || "Imported Gender";
+          clean[genderCol] = finalCandidate.gender;
+        }
+        return clean;
+      });
+
       const res = await fetch("/api/candidates/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: sanitizedRows, mapping, eventId: batch.id }),
+        body: JSON.stringify({
+          rows: sanitizedRows,
+          mapping: mapping["gender"] ? mapping : { ...mapping, gender: "Imported Gender" },
+          eventId: batch.id
+        }),
       });
       const data = await res.json();
       if (res.ok) {
-        // Server counts are authoritative; add any client-side skips on top
         const serverDupes = data.duplicates?.length ?? 0;
         showToast(buildNote(data.created ?? freshCandidates.length, serverDupes + skippedDupes.length), "success");
       } else {
@@ -784,19 +761,76 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
   initialMapping: Record<string, string>;
   importing: boolean;
   onClose: () => void;
-  onConfirm: (mapping: Record<string, string>) => void;
+  onConfirm: (parsed: Candidate[], mapping: Record<string, string>) => void;
 }) {
+  const [stage, setStage] = useState<"mapping" | "review">("mapping");
   const [mapping, setMapping] = useState<Record<string, string>>(initialMapping);
-  const canImport = !!mapping["fullName"] && !!mapping["gender"];
+  const [parsedCandidates, setParsedCandidates] = useState<Candidate[]>([]);
+  const { event: batch } = useApp();
 
-  function setField(key: string, val: string) {
-    setMapping((prev) => ({ ...prev, [key]: val }));
+  const canProceed = !!mapping["fullName"];
+
+  function handleGoToReview() {
+    const getRaw = (row: Record<string, unknown>, field: string): string => {
+      const col = mapping[field];
+      if (!col) return "";
+      const v = row[col];
+      return typeof v === "string" ? sanitizeCell(v) : v !== null && v !== undefined ? String(v) : "";
+    };
+
+    const now = new Date().toISOString();
+    const parsed = rows.map((row, i): Candidate | null => {
+      const fullName = getRaw(row, "fullName");
+      if (!fullName) return null;
+      const nameParts = fullName.split(",").map((s) => s.trim());
+      const lastName = nameParts[0] ?? fullName;
+      const firstName = nameParts[1] ?? "";
+      
+      const genderRaw = getRaw(row, "gender").toUpperCase();
+      let gender: Gender = "MALE";
+      if (genderRaw.startsWith("F")) gender = "FEMALE";
+      else if (genderRaw.startsWith("M")) gender = "MALE";
+      // If gender was not mapped or is empty, we'll let user select in review stage
+
+      const ageStr = getRaw(row, "age");
+      return {
+        id: `import-${Date.now()}-${i}`,
+        timestamp: now, fullName, lastName, firstName, gender,
+        age: ageStr ? parseInt(ageStr, 10) || null : null,
+        school: getRaw(row, "school") || null,
+        inviterName: getRaw(row, "inviterName") || null,
+        howHeard: getRaw(row, "howHeard") || null,
+        yeBatch: batch.name,
+        birthday: getRaw(row, "birthday") || null,
+        address: getRaw(row, "address") || null,
+        facebook: getRaw(row, "facebook") || null,
+        contact: getRaw(row, "contact") || null,
+        fatherName: getRaw(row, "fatherName") || null,
+        fatherContact: getRaw(row, "fatherContact") || null,
+        motherName: getRaw(row, "motherName") || null,
+        motherContact: getRaw(row, "motherContact") || null,
+        allergies: getRaw(row, "allergies") || null,
+        shepherdNotes: null, groupId: null, roomId: null,
+        eventId: batch.id, createdAt: now, updatedAt: now,
+      };
+    }).filter((c): c is Candidate => c !== null);
+
+    setParsedCandidates(parsed);
+    setStage("review");
+  }
+
+  function updateParsedGender(idx: number, gender: Gender) {
+    setParsedCandidates((prev) => {
+      const next = [...prev];
+      if (next[idx]) next[idx] = { ...next[idx], gender };
+      return next;
+    });
   }
 
   return (
     <Modal
       open
-      title="Map Spreadsheet Columns"
+      title={stage === "mapping" ? "Map Spreadsheet Columns" : "Review & Set Genders"}
       onClose={onClose}
       size="lg"
       footer={
@@ -806,61 +840,92 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
           </span>
           <div style={{ display: "flex", gap: "var(--space-sm)" }}>
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={importing}>Cancel</button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={!canImport || importing}
-              onClick={() => onConfirm(mapping)}
-            >
-              {importing ? "Importing…" : `Import ${rows.length} row${rows.length !== 1 ? "s" : ""}`}
-            </button>
+            {stage === "mapping" ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!canProceed}
+                onClick={handleGoToReview}
+              >
+                Review Candidates →
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={importing}
+                onClick={() => onConfirm(parsedCandidates, mapping)}
+              >
+                {importing ? "Importing…" : `Finalize Import (${parsedCandidates.length})`}
+              </button>
+            )}
           </div>
         </div>
       }
     >
-      <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-lg)" }}>
-        Match each system field to the corresponding column in your spreadsheet. Fields marked <span style={{ color: "var(--color-danger)" }}>*</span> are required.
-      </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-        {SYSTEM_FIELDS.map(({ key, label, required }) => (
-          <div key={key} style={{ display: "grid", gridTemplateColumns: "160px 1fr", alignItems: "center", gap: "var(--space-md)" }}>
-            <label style={{ fontSize: "var(--font-size-sm)", color: required ? "var(--text-primary)" : "var(--text-secondary)", fontWeight: required ? "var(--font-weight-semibold)" : undefined }}>
-              {label}{required && <span style={{ color: "var(--color-danger)", marginLeft: 2 }}>*</span>}
-            </label>
-            <select className="input" value={mapping[key] ?? ""} onChange={(e) => setField(key, e.target.value)} style={{ fontSize: "var(--font-size-sm)" }}>
-              <option value="">— Skip —</option>
-              {headers.map((h) => <option key={h} value={h}>{h}</option>)}
-            </select>
+      {stage === "mapping" ? (
+        <>
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-lg)" }}>
+            Match each system field to the corresponding column in your spreadsheet.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+            {SYSTEM_FIELDS.map(({ key, label, required }) => (
+              <div key={key} style={{ display: "grid", gridTemplateColumns: "160px 1fr", alignItems: "center", gap: "var(--space-md)" }}>
+                <label style={{ fontSize: "var(--font-size-sm)", color: required ? "var(--text-primary)" : "var(--text-secondary)", fontWeight: required ? "var(--font-weight-semibold)" : undefined }}>
+                  {label}{required && <span style={{ color: "var(--color-danger)", marginLeft: 2 }}>*</span>}
+                </label>
+                <select
+                  className="input"
+                  value={mapping[key] ?? ""}
+                  onChange={(e) => setMapping(prev => ({ ...prev, [key]: e.target.value }))}
+                  style={{ fontSize: "var(--font-size-sm)" }}
+                >
+                  <option value="">— Skip —</option>
+                  {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                </select>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div style={{ marginTop: "var(--space-xl)" }}>
-        <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginBottom: "var(--space-sm)" }}>
-          Preview — first 3 rows
-        </p>
-        <div style={{ overflowX: "auto", background: "var(--bg-hover)", borderRadius: "var(--radius-sm)", padding: "var(--space-sm)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--font-size-xs)" }}>
-            <thead>
-              <tr>
-                {headers.map((h) => (
-                  <th key={h} style={{ padding: "2px 8px", textAlign: "left", color: "var(--text-muted)", borderBottom: "1px solid var(--border-subtle)", whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 3).map((row, i) => (
-                <tr key={i}>
-                  {headers.map((h) => (
-                    <td key={h} style={{ padding: "2px 8px", color: "var(--text-secondary)", whiteSpace: "nowrap", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {String(row[h] ?? "")}
-                    </td>
-                  ))}
+        </>
+      ) : (
+        <>
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-lg)" }}>
+            Verify the information below. You can set or correct genders before importing.
+          </p>
+          <div style={{ maxHeight: "400px", overflowY: "auto", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "var(--font-size-sm)" }}>
+              <thead style={{ position: "sticky", top: 0, background: "var(--bg-card)", zIndex: 1, boxShadow: "0 1px 0 var(--border-color)" }}>
+                <tr>
+                  <th style={{ textAlign: "left", padding: "var(--space-sm) var(--space-md)", color: "var(--text-muted)", fontWeight: 600 }}>Name</th>
+                  <th style={{ textAlign: "left", padding: "var(--space-sm) var(--space-md)", color: "var(--text-muted)", fontWeight: 600, width: 140 }}>Gender</th>
+                  <th style={{ textAlign: "left", padding: "var(--space-sm) var(--space-md)", color: "var(--text-muted)", fontWeight: 600 }}>School / Info</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              </thead>
+              <tbody>
+                {parsedCandidates.map((c, idx) => (
+                  <tr key={idx} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                    <td style={{ padding: "var(--space-sm) var(--space-md)", color: "var(--text-primary)", fontWeight: 500 }}>{c.fullName}</td>
+                    <td style={{ padding: "var(--space-sm) var(--space-md)" }}>
+                      <select
+                        className="input"
+                        style={{ padding: "2px 8px", height: "32px", fontSize: "var(--font-size-xs)" }}
+                        value={c.gender}
+                        onChange={(e) => updateParsedGender(idx, e.target.value as Gender)}
+                      >
+                        <option value="MALE">♂ Male</option>
+                        <option value="FEMALE">♀ Female</option>
+                      </select>
+                    </td>
+                    <td style={{ padding: "var(--space-sm) var(--space-md)", color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>
+                      {c.school || c.inviterName || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </Modal>
   );
 }
