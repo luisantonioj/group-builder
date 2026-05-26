@@ -15,6 +15,7 @@ type SortConfig = { key: string; dir: "asc" | "desc" };
 
 // Extra columns: hidden by default, toggleable via Columns modal
 const EXTRA_COLUMNS: { key: keyof Candidate; label: string }[] = [
+  { key: "school",        label: "School / Work" },
   { key: "contact",       label: "Contact" },
   { key: "birthday",      label: "Birthday" },
   { key: "allergies",     label: "Allergies" },
@@ -457,7 +458,7 @@ export default function MasterlistPage() {
 
   // ── Render ───────────────────────────────────────────────────────────────────
 
-  const totalCols = 9 + activeExtraCols.length;
+  const totalCols = 8 + activeExtraCols.length;
   const activeSortLabel = sortConfig ? sortCols.find((c) => c.key === sortConfig.key)?.label ?? sortConfig.key : null;
 
   return (
@@ -575,7 +576,6 @@ export default function MasterlistPage() {
                 <th style={thSort} onClick={() => handleSort("fullName")}>Name{sortArrow("fullName")}</th>
                 <th style={thSort} onClick={() => handleSort("gender")}>Gender{sortArrow("gender")}</th>
                 <th style={thSort} onClick={() => handleSort("age")}>Age{sortArrow("age")}</th>
-                <th style={thSort} onClick={() => handleSort("school")}>School / Work{sortArrow("school")}</th>
                 <th style={thSort} onClick={() => handleSort("inviterName")}>Inviter{sortArrow("inviterName")}</th>
                 <th style={thSort} onClick={() => handleSort("connections")}>Connections{sortArrow("connections")}</th>
                 <th style={thSort} onClick={() => handleSort("group")}>Group{sortArrow("group")}</th>
@@ -618,7 +618,6 @@ export default function MasterlistPage() {
                     </td>
                     <td><GenderChip gender={c.gender} /></td>
                     <td style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>{c.age ?? "—"}</td>
-                    <td style={{ color: "var(--text-secondary)" }}>{c.school ?? "—"}</td>
                     <td style={{ color: "var(--text-secondary)", fontSize: "var(--font-size-xs)" }}>{c.inviterName ?? "—"}</td>
                     <td>
                       {connCount > 0
@@ -735,7 +734,7 @@ function ColumnModal({ visible, onApply, onClose }: {
       }
     >
       <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-md)" }}>
-        Fixed columns (Name, Gender, Age, School, Inviter, Connections, Group, Room) are always shown.
+        Fixed columns (Name, Gender, Age, Inviter, Connections, Group, Room) are always shown.
         Toggle additional columns below.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
