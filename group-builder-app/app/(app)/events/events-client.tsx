@@ -59,7 +59,7 @@ export default function EventsClient({ isAdmin }: { isAdmin: boolean }) {
     router.push("/dashboard");
   }
 
-  async function handleToggleFeature(ev: EventWithCount, field: "featureVisualizer" | "featureRoomAssignment") {
+  async function handleToggleFeature(ev: EventWithCount, field: "featureVisualizer" | "featureRoomAssignment" | "isActive") {
     const updated = { ...ev, [field]: !ev[field] };
     try {
       const res = await fetch(`/api/events/${ev.id}`, {
@@ -192,12 +192,34 @@ export default function EventsClient({ isAdmin }: { isAdmin: boolean }) {
                       <h2 style={{ fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-bold)", color: "var(--text-primary)", margin: 0 }}>
                         {ev.name}
                       </h2>
-                      {ev.isActive && (
-                        <span className="chip chip-success">
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "currentColor", display: "inline-block" }} />
-                          Active
-                        </span>
-                      )}
+                      <button
+                        className={`chip ${ev.isActive ? 'chip-success' : ''}`}
+                        onClick={isAdmin ? (e) => { e.stopPropagation(); handleToggleFeature(ev, "isActive"); } : undefined}
+                        disabled={!isAdmin}
+                        title={isAdmin ? `Mark as ${ev.isActive ? 'inactive' : 'active'}` : undefined}
+                        style={{
+                          cursor: isAdmin ? "pointer" : "default",
+                          border: ev.isActive ? "none" : "1px solid var(--border-color)",
+                          background: ev.isActive ? undefined : "transparent",
+                          color: ev.isActive ? undefined : "var(--text-muted)",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "2px 8px",
+                          borderRadius: "var(--radius-full)",
+                          fontSize: "var(--font-size-xs)",
+                          fontWeight: "var(--font-weight-medium)",
+                        }}
+                      >
+                        <span style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: "50%",
+                          background: ev.isActive ? "currentColor" : "var(--text-muted)",
+                          display: "inline-block"
+                        }} />
+                        {ev.isActive ? "Active" : "Inactive"}
+                      </button>
                       {isLoaded && (
                         <span className="chip" style={{ background: "var(--color-primary)", color: "white" }}>
                           Loaded
