@@ -114,7 +114,7 @@ interface ImportModalData {
 }
 
 export default function MasterlistPage() {
-  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, deleteCandidates, importCandidates, addConnection, deleteConnection, event: batch } = useApp();
+  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, deleteCandidates, importCandidates, addConnection, confirmConnection, deleteConnection, event: batch } = useApp();
   const { showToast } = useToast();
 
   // Filters
@@ -146,12 +146,14 @@ export default function MasterlistPage() {
   // ── Derived data ─────────────────────────────────────────────────────────────
 
   const connectionCounts = useMemo(() => {
-    const map = new Map<string, number>();
+    const confirmed = new Map<string, number>();
+    const pending   = new Map<string, number>();
     for (const conn of connections) {
-      map.set(conn.fromId, (map.get(conn.fromId) ?? 0) + 1);
-      map.set(conn.toId, (map.get(conn.toId) ?? 0) + 1);
+      const target = conn.confirmed ? confirmed : pending;
+      target.set(conn.fromId, (target.get(conn.fromId) ?? 0) + 1);
+      target.set(conn.toId,   (target.get(conn.toId)   ?? 0) + 1);
     }
-    return map;
+    return { confirmed, pending };
   }, [connections]);
 
   const filtered = useMemo(() => {
@@ -176,8 +178,8 @@ export default function MasterlistPage() {
         let bVal: string | number | null | undefined;
 
         if (sortConfig.key === "connections") {
-          aVal = connectionCounts.get(a.id) ?? 0;
-          bVal = connectionCounts.get(b.id) ?? 0;
+          aVal = (connectionCounts.confirmed.get(a.id) ?? 0) + (connectionCounts.pending.get(a.id) ?? 0);
+          bVal = (connectionCounts.confirmed.get(b.id) ?? 0) + (connectionCounts.pending.get(b.id) ?? 0);
         } else if (sortConfig.key === "group") {
           aVal = groups.find((g) => g.id === a.groupId)?.name ?? null;
           bVal = groups.find((g) => g.id === b.groupId)?.name ?? null;
@@ -319,6 +321,21 @@ export default function MasterlistPage() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
+  }
+
+  // ── Connection confirm handler ───────────────────────────────────────────────
+
+  async function handleConfirmConnection(id: string) {
+    confirmConnection(id); // optimistic update
+    try {
+      await fetch(`/api/connections/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmed: true }),
+      });
+    } catch {
+      // silently ignore — optimistic is fine here
+    }
   }
 
   // ── Import handlers ───────────────────────────────────────────────────────────
@@ -611,7 +628,8 @@ export default function MasterlistPage() {
             </thead>
             <tbody>
               {filtered.map((c) => {
-                const connCount = connectionCounts.get(c.id) ?? 0;
+                const connCount = connectionCounts.confirmed.get(c.id) ?? 0;
+                const pendingCount = connectionCounts.pending.get(c.id) ?? 0;
                 const group = groups.find((g) => g.id === c.groupId);
                 const room = rooms.find((r) => r.id === c.roomId);
                 const isSelected = selectedIds.includes(c.id);
@@ -630,9 +648,11 @@ export default function MasterlistPage() {
                     <td style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>{c.age ?? "—"}</td>
                     <td style={{ color: "var(--text-secondary)", fontSize: "var(--font-size-xs)" }}>{c.inviterName ?? "—"}</td>
                     <td>
-                      {connCount > 0
-                        ? <Chip kind="warning">⚠ {connCount}</Chip>
-                        : <span style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>0</span>}
+                      <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                        {connCount > 0 && <Chip kind="warning">⚠ {connCount}</Chip>}
+                        {pendingCount > 0 && <Chip kind="default" style={{ opacity: 0.75 }}>? {pendingCount}</Chip>}
+                        {connCount === 0 && pendingCount === 0 && <span style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>0</span>}
+                      </div>
                     </td>
                     <td>{group ? <Chip kind="accent">{group.name}</Chip> : <span style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>—</span>}</td>
                     <td>{room ? <Chip kind="default">{room.name}</Chip> : <span style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>—</span>}</td>
@@ -680,7 +700,7 @@ export default function MasterlistPage() {
           groups={groups} rooms={rooms}
           candidates={candidates} connections={connections}
           onSave={handleSave} onDelete={handleDelete}
-          onAddConnection={addConnection} onDeleteConnection={deleteConnection}
+          onAddConnection={addConnection} onConfirmConnection={handleConfirmConnection} onDeleteConnection={deleteConnection}
           onClose={() => { setEditCandidate(null); setIsAddNew(false); }}
         />
       )}
@@ -1012,7 +1032,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
 
 function CandidateModal({
   candidate: initial, isNew, groups, rooms, candidates, connections,
-  onSave, onDelete, onClose, onAddConnection, onDeleteConnection,
+  onSave, onDelete, onClose, onAddConnection, onConfirmConnection, onDeleteConnection,
 }: {
   candidate: Candidate;
   isNew: boolean;
@@ -1024,6 +1044,7 @@ function CandidateModal({
   onDelete: (id: string) => void;
   onClose: () => void;
   onAddConnection: (conn: Connection) => void;
+  onConfirmConnection: (id: string) => void;
   onDeleteConnection: (id: string) => void;
 }) {
   const [form, setForm] = useState<Candidate>(initial);
@@ -1065,6 +1086,7 @@ function CandidateModal({
       toId: connSelectedId,
       relationshipType: connRelType,
       source: "MANUAL",
+      confirmed: true,
       note: null,
       createdAt: new Date().toISOString(),
       fromName: initial.fullName,
@@ -1089,17 +1111,29 @@ function CandidateModal({
 
   const genderRooms = rooms.filter((r) => r.gender === form.gender || r.gender === "MIXED");
 
+  const confirmedConns = myConnections.filter((c) => c.confirmed);
+  const pendingConns   = myConnections.filter((c) => !c.confirmed);
+
   const tabLabels: Record<typeof tab, React.ReactNode> = {
     "details": "Details",
     "connections": (
       <>
         Connections
-        {myConnections.length > 0 && (
+        {confirmedConns.length > 0 && (
           <span style={{
             marginLeft: 6, background: "var(--color-accent)", color: "#fff",
             borderRadius: 10, fontSize: "0.7em", padding: "1px 6px", fontWeight: 600,
           }}>
-            {myConnections.length}
+            {confirmedConns.length}
+          </span>
+        )}
+        {pendingConns.length > 0 && (
+          <span style={{
+            marginLeft: 4, background: "var(--bg-hover)", color: "var(--text-secondary)",
+            border: "1px solid var(--border-default)",
+            borderRadius: 10, fontSize: "0.7em", padding: "1px 6px", fontWeight: 600,
+          }}>
+            ?{pendingConns.length}
           </span>
         )}
       </>
@@ -1197,7 +1231,7 @@ function CandidateModal({
             {/* Header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-md)" }}>
               <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)" }}>
-                {myConnections.length} known connection{myConnections.length !== 1 ? "s" : ""}.
+                {confirmedConns.length} confirmed{pendingConns.length > 0 ? `, ${pendingConns.length} pending review` : ""}.
                 {" "}Manually add another to flag conflicts during grouping.
               </p>
               <button
@@ -1298,16 +1332,33 @@ function CandidateModal({
                 const otherId = isFrom ? conn.toId : conn.fromId;
                 const otherName = isFrom ? conn.toName : conn.fromName;
                 const other = candidates.find((c) => c.id === otherId);
+                const isPending = !conn.confirmed;
                 return (
                   <div
                     key={conn.id}
                     style={{
                       display: "flex", alignItems: "center", gap: "var(--space-sm)",
                       padding: "var(--space-sm) var(--space-md)",
-                      background: "var(--bg-hover)", borderRadius: "var(--radius-sm)",
+                      background: isPending
+                        ? "color-mix(in srgb, var(--color-warning) 6%, var(--bg-hover))"
+                        : "var(--bg-hover)",
+                      border: isPending ? "1px dashed var(--border-default)" : "1px solid transparent",
+                      borderRadius: "var(--radius-sm)",
+                      opacity: isPending ? 0.85 : 1,
                     }}
                   >
-                    <Initials name={otherName ?? "?"} gender={other?.gender ?? "MALE"} size={28} />
+                    <div style={{ position: "relative" }}>
+                      <Initials name={otherName ?? "?"} gender={other?.gender ?? "MALE"} size={28} />
+                      {isPending && (
+                        <span style={{
+                          position: "absolute", bottom: -2, right: -2,
+                          background: "var(--color-warning)", color: "#fff",
+                          borderRadius: "50%", width: 12, height: 12,
+                          fontSize: 9, fontWeight: 700, display: "flex",
+                          alignItems: "center", justifyContent: "center", lineHeight: 1,
+                        }}>?</span>
+                      )}
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 500, fontSize: "var(--font-size-sm)" }}>
                         {otherName ?? otherId}
@@ -1317,26 +1368,59 @@ function CandidateModal({
                           {other.school}
                         </div>
                       )}
+                      {isPending && (
+                        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--color-warning)", marginTop: 1 }}>
+                          Pending review — confirm if correct
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
                       <Chip kind="default">{connLabel(conn)}</Chip>
-                      <Chip kind={conn.source === "AUTO" ? "accent" : "default"}>
-                        {conn.source.toLowerCase()}
-                      </Chip>
-                      {conn.source === "MANUAL" && (
-                        <button
-                          type="button"
-                          title="Remove connection"
-                          onClick={() => onDeleteConnection(conn.id)}
-                          style={{
-                            background: "none", border: "none", cursor: "pointer",
-                            padding: 4, color: "var(--text-muted)", display: "flex", alignItems: "center",
-                          }}
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
-                          </svg>
-                        </button>
+                      {isPending ? (
+                        <>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            style={{ fontSize: "var(--font-size-xs)", padding: "3px 8px" }}
+                            onClick={() => onConfirmConnection(conn.id)}
+                          >
+                            ✓ Confirm
+                          </button>
+                          <button
+                            type="button"
+                            title="Dismiss connection"
+                            onClick={() => onDeleteConnection(conn.id)}
+                            style={{
+                              background: "none", border: "none", cursor: "pointer",
+                              padding: 4, color: "var(--text-muted)", display: "flex", alignItems: "center",
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <Chip kind={conn.source === "AUTO" ? "accent" : "default"}>
+                            {conn.source.toLowerCase()}
+                          </Chip>
+                          {conn.source === "MANUAL" && (
+                            <button
+                              type="button"
+                              title="Remove connection"
+                              onClick={() => onDeleteConnection(conn.id)}
+                              style={{
+                                background: "none", border: "none", cursor: "pointer",
+                                padding: 4, color: "var(--text-muted)", display: "flex", alignItems: "center",
+                              }}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
+                              </svg>
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>

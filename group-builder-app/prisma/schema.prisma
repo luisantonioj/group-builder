@@ -181,6 +181,7 @@ model Connection {
   relationshipType RelationshipType
   source           ConnectionSource
   note             String?
+  confirmed        Boolean          @default(true)
 
   from      Candidate @relation("FromCandidate", fields: [fromId], references: [id], onDelete: Cascade)
   to        Candidate @relation("ToCandidate", fields: [toId], references: [id], onDelete: Cascade)

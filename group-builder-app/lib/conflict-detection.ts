@@ -1,12 +1,14 @@
 import type { Candidate, Connection, Conflict } from "@/types";
 import { fuzzyMatchInviter, groupBySharedInviter } from "./fuzzy-match";
 
-// Build an adjacency map from a connection list for O(1) lookup
+// Build an adjacency map from a connection list for O(1) lookup.
+// Only confirmed connections count as real edges for conflict detection.
 export function buildAdjacencyMap(
   connections: Connection[]
 ): Map<string, Set<string>> {
   const map = new Map<string, Set<string>>();
   for (const conn of connections) {
+    if (!conn.confirmed) continue;
     if (!map.has(conn.fromId)) map.set(conn.fromId, new Set());
     if (!map.has(conn.toId)) map.set(conn.toId, new Set());
     map.get(conn.fromId)!.add(conn.toId);
@@ -152,6 +154,7 @@ export function deriveAutoConnections(candidates: Candidate[]): Connection[] {
       relationshipType: "BARKADA",
       source: "AUTO",
       note: `Invited by "${candidate.inviterName}"`,
+      confirmed: true,
       createdAt: candidate.createdAt,
       fromName: candidate.fullName,
       toName: match.candidate.fullName,
@@ -161,14 +164,25 @@ export function deriveAutoConnections(candidates: Candidate[]): Connection[] {
   return result;
 }
 
+// A co-invitee connection is "confirmed" when the canonical inviter name is clearly
+// a full name: at least 2 words each with ≥ 3 characters (e.g. "Maria Santos").
+// Single-word names ("Santos"), initials ("M. Santos"), or short tokens are unconfirmed.
+function isInviterNameComplete(name: string): boolean {
+  const words = name.trim().split(/\s+/).filter((w) => w.replace(/[^a-zA-Z]/g, "").length >= 3);
+  return words.length >= 2;
+}
+
 // Derive AUTO connections between candidates who share the same inviter name.
 // Uses fuzzy clustering so "Juan Santos" / "Juan Sants" / "J. Santos" are treated as one group.
+// Connections from incomplete inviter names (single word / short tokens) are marked confirmed=false
+// and require user confirmation before participating in conflict detection.
 export function deriveCoInviteeConnections(candidates: Candidate[]): Connection[] {
   const result: Connection[] = [];
   const seen = new Set<string>();
 
   const groups = groupBySharedInviter(candidates);
   for (const { canonicalName, candidates: group } of groups) {
+    const confirmed = isInviterNameComplete(canonicalName);
     for (let i = 0; i < group.length; i++) {
       for (let j = i + 1; j < group.length; j++) {
         const [a, b] = [group[i].id, group[j].id].sort();
@@ -183,6 +197,7 @@ export function deriveCoInviteeConnections(candidates: Candidate[]): Connection[
           relationshipType: "CHURCHMATE",
           source: "AUTO",
           note: `Shared inviter: "${canonicalName}"`,
+          confirmed,
           createdAt: group[i].createdAt,
           fromName: group[i].fullName,
           toName: group[j].fullName,

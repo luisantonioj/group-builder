@@ -49,6 +49,7 @@ export default function VisualizerPage() {
       toName: to.fullName,
       relationshipType: newConn.relationshipType as import("@/types").RelationshipType,
       source: "MANUAL",
+      confirmed: true,
       note: newConn.note.trim() || null,
       createdAt: new Date().toISOString(),
     });
@@ -410,6 +411,7 @@ export default function VisualizerPage() {
                     const otherName = isFrom ? conn.toName : conn.fromName;
                     const other = candidates.find((c) => c.id === otherId);
                     const isConflict = isConflictEdge(conn.fromId, conn.toId);
+                    const isPending = !conn.confirmed;
                     return (
                       <div
                         key={conn.id}
@@ -417,10 +419,13 @@ export default function VisualizerPage() {
                           display: "flex", alignItems: "center", gap: "var(--space-xs)",
                           padding: "6px var(--space-sm)",
                           borderRadius: "var(--radius-sm)",
+                          opacity: isPending ? 0.8 : 1,
                           background: isConflict
                             ? "color-mix(in srgb, var(--color-danger) 8%, transparent)"
                             : "var(--bg-hover)",
-                          border: isConflict
+                          border: isPending
+                            ? "1px dashed var(--border-default)"
+                            : isConflict
                             ? "1px solid color-mix(in srgb, var(--color-danger) 30%, transparent)"
                             : "1px solid transparent",
                         }}
@@ -445,12 +450,18 @@ export default function VisualizerPage() {
                             >
                               {connLabel(conn)}
                             </Chip>
-                            <Chip
-                              kind={conn.source === "AUTO" ? "accent" : "default"}
-                              style={{ fontSize: "0.65rem", padding: "1px 5px" }}
-                            >
-                              {conn.source.toLowerCase()}
-                            </Chip>
+                            {isPending ? (
+                              <Chip kind="warning" style={{ fontSize: "0.65rem", padding: "1px 5px" }}>
+                                ? pending
+                              </Chip>
+                            ) : (
+                              <Chip
+                                kind={conn.source === "AUTO" ? "accent" : "default"}
+                                style={{ fontSize: "0.65rem", padding: "1px 5px" }}
+                              >
+                                {conn.source.toLowerCase()}
+                              </Chip>
+                            )}
                             {isConflict && (
                               <Chip
                                 kind="danger"
@@ -608,7 +619,7 @@ export default function VisualizerPage() {
               </thead>
               <tbody>
                 {connections.map((conn) => (
-                  <tr key={conn.id}>
+                  <tr key={conn.id} style={{ opacity: conn.confirmed ? 1 : 0.7 }}>
                     <td style={{ fontWeight: "var(--font-weight-medium)" }}>{conn.fromName}</td>
                     <td style={{ fontWeight: "var(--font-weight-medium)" }}>{conn.toName}</td>
                     <td>
@@ -620,9 +631,10 @@ export default function VisualizerPage() {
                       </Chip>
                     </td>
                     <td>
-                      <Chip kind={conn.source === "AUTO" ? "accent" : "default"}>
-                        {conn.source === "AUTO" ? "Auto" : "Manual"}
-                      </Chip>
+                      {conn.confirmed
+                        ? <Chip kind={conn.source === "AUTO" ? "accent" : "default"}>{conn.source === "AUTO" ? "Auto" : "Manual"}</Chip>
+                        : <Chip kind="warning">? pending</Chip>
+                      }
                     </td>
                     <td style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
                       {conn.note ?? "—"}

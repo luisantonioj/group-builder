@@ -113,6 +113,7 @@ export interface Connection {
   relationshipType: RelationshipType;
   source: ConnectionSource;
   note: string | null;
+  confirmed: boolean;
   createdAt: string;
   // Populated on fetch
   fromName?: string;

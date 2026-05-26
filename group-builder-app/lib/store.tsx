@@ -46,6 +46,7 @@ type Action =
   | { type: "DELETE_CANDIDATE"; payload: string }
   | { type: "DELETE_CANDIDATES"; payload: string[] }
   | { type: "ADD_CONNECTION"; payload: Connection }
+  | { type: "CONFIRM_CONNECTION"; payload: string }
   | { type: "DELETE_CONNECTION"; payload: string }
   | { type: "ADD_GROUP"; payload: Group }
   | { type: "UPDATE_GROUP"; payload: Group }
@@ -116,6 +117,13 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case "ADD_CONNECTION":
       return { ...state, connections: [...state.connections, action.payload] };
+    case "CONFIRM_CONNECTION":
+      return {
+        ...state,
+        connections: state.connections.map((c) =>
+          c.id === action.payload ? { ...c, confirmed: true } : c
+        ),
+      };
     case "DELETE_CONNECTION":
       return {
         ...state,
@@ -225,6 +233,7 @@ interface AppContextValue extends AppState {
   deleteCandidates: (ids: string[]) => void;
   importCandidates: (candidates: Candidate[]) => void;
   addConnection: (conn: Connection) => void;
+  confirmConnection: (id: string) => void;
   deleteConnection: (id: string) => void;
   addGroup: (group: Group) => void;
   updateGroup: (group: Group) => void;
@@ -378,6 +387,10 @@ export function AppProvider({
     addActivity(`Added connection: ${conn.fromName} ↔ ${conn.toName}`, "connection", "created");
   }, [addActivity]);
 
+  const confirmConnection = useCallback((id: string) => {
+    dispatch({ type: "CONFIRM_CONNECTION", payload: id });
+  }, []);
+
   const deleteConnection = useCallback((id: string) => {
     dispatch({ type: "DELETE_CONNECTION", payload: id });
   }, []);
@@ -471,6 +484,7 @@ export function AppProvider({
     deleteCandidates,
     importCandidates,
     addConnection,
+    confirmConnection,
     deleteConnection,
     addGroup,
     updateGroup,

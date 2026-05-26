@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
           relationshipType: conn.relationshipType,
           source: "AUTO",
           note: conn.note,
+          confirmed: conn.confirmed,
         },
       });
     } catch {
