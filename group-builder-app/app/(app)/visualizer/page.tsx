@@ -10,6 +10,14 @@ import { useToast } from "@/components/ui/toast";
 
 type Tab = "graph" | "clusters" | "table";
 
+function connLabel(conn: { source: string; relationshipType: string; note?: string | null }): string {
+  if (conn.source === "AUTO" && conn.note) {
+    const m = conn.note.match(/^Shared inviter:\s*"(.+)"$/);
+    if (m) return `same inviter (${m[1]})`;
+  }
+  return conn.relationshipType.toLowerCase();
+}
+
 export default function VisualizerPage() {
   const { candidates, connections, adjacency, allConflicts, addConnection } = useApp();
   const { showToast } = useToast();
@@ -435,7 +443,7 @@ export default function VisualizerPage() {
                               kind="default"
                               style={{ fontSize: "0.65rem", padding: "1px 5px" }}
                             >
-                              {conn.relationshipType.toLowerCase()}
+                              {connLabel(conn)}
                             </Chip>
                             <Chip
                               kind={conn.source === "AUTO" ? "accent" : "default"}
@@ -545,7 +553,7 @@ export default function VisualizerPage() {
                                 kind="default"
                                 style={{ fontSize: "0.65rem", padding: "1px 5px" }}
                               >
-                                {conn.relationshipType.toLowerCase()}
+                                {connLabel(conn)}
                               </Chip>
                               <Chip
                                 kind={conn.source === "AUTO" ? "accent" : "default"}
@@ -608,7 +616,7 @@ export default function VisualizerPage() {
                         kind="default"
                         style={{ textTransform: "capitalize" } as React.CSSProperties}
                       >
-                        {conn.relationshipType.toLowerCase()}
+                        {connLabel(conn)}
                       </Chip>
                     </td>
                     <td>

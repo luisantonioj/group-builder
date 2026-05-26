@@ -322,7 +322,13 @@ export function AppProvider({
           candidates:  candidatesRes.status  === "fulfilled" ? (candidatesRes.value.data  ?? []) : [],
           groups:      groupsRes.status      === "fulfilled" ? (groupsRes.value.data      ?? []) : [],
           rooms:       roomsRes.status       === "fulfilled" ? (roomsRes.value.data       ?? []) : [],
-          connections: connectionsRes.status === "fulfilled" ? (connectionsRes.value.data ?? []) : [],
+          connections: connectionsRes.status === "fulfilled"
+            ? (connectionsRes.value.data ?? []).map((c: Connection & { from?: { fullName: string }; to?: { fullName: string } }) => ({
+                ...c,
+                fromName: c.from?.fullName ?? c.fromName,
+                toName:   c.to?.fullName   ?? c.toName,
+              }))
+            : [],
         },
       });
     } catch {

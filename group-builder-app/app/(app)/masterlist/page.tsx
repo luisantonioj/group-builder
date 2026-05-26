@@ -41,6 +41,15 @@ const FIXED_SORT_COLS = [
   { key: "room",        label: "Room" },
 ];
 
+// Returns a human-readable label for a connection, using the note for AUTO connections
+function connLabel(conn: { source: string; relationshipType: string; note?: string | null }): string {
+  if (conn.source === "AUTO" && conn.note) {
+    const m = conn.note.match(/^Shared inviter:\s*"(.+)"$/);
+    if (m) return `same inviter (${m[1]})`;
+  }
+  return conn.relationshipType.toLowerCase();
+}
+
 // ─── Import helpers ────────────────────────────────────────────────────────────
 
 function sanitizeCell(val: unknown): string {
@@ -1308,14 +1317,9 @@ function CandidateModal({
                           {other.school}
                         </div>
                       )}
-                      {conn.source === "AUTO" && conn.note && (
-                        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", fontStyle: "italic" }}>
-                          {conn.note}
-                        </div>
-                      )}
                     </div>
                     <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
-                      <Chip kind="default">{conn.relationshipType.toLowerCase()}</Chip>
+                      <Chip kind="default">{connLabel(conn)}</Chip>
                       <Chip kind={conn.source === "AUTO" ? "accent" : "default"}>
                         {conn.source.toLowerCase()}
                       </Chip>
