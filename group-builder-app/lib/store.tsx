@@ -8,6 +8,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useReducer,
 } from "react";
@@ -328,6 +329,11 @@ export function AppProvider({
       // Silently ignore network errors — app stays with current state
     }
   }, []);
+
+  // Load data from the API whenever the active event changes
+  useEffect(() => {
+    if (state.event.id) loadEventData(state.event.id);
+  }, [state.event.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addCandidate = useCallback((candidate: Candidate) => {
     dispatch({ type: "ADD_CANDIDATE", payload: candidate });
