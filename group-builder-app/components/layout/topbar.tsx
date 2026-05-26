@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useSidebarState } from "@/lib/sidebar-state";
 import { useApp } from "@/lib/store";
 
@@ -61,15 +60,13 @@ function ThemeToggle() {
 
 export default function Topbar() {
   const { openMobile } = useSidebarState();
-  const router = useRouter();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { event } = useApp();
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    router.refresh();
-    setTimeout(() => setIsRefreshing(false), 600);
-  }, [router]);
+    window.location.reload();
+  }, []);
 
   return (
     <header className="topbar">
