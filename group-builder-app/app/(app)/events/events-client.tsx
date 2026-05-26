@@ -281,7 +281,7 @@ export default function EventsClient({ isAdmin }: { isAdmin: boolean }) {
                   />
                 </div>
 
-                {!isLoaded ? (
+                {!isLoaded && (
                   <button
                     className="btn btn-primary"
                     onClick={() => handleLoad(ev)}
@@ -290,13 +290,6 @@ export default function EventsClient({ isAdmin }: { isAdmin: boolean }) {
                   >
                     {isSwitching ? "Loading…" : "Load Event"}
                   </button>
-                ) : (
-                  <div style={{ color: "var(--color-primary)", fontWeight: "var(--font-weight-bold)", fontSize: "var(--font-size-sm)", display: "flex", alignItems: "center", gap: 4 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    Active
-                  </div>
                 )}
               </div>
             </div>
