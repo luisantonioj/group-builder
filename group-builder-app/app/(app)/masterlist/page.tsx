@@ -105,7 +105,7 @@ interface ImportModalData {
 }
 
 export default function MasterlistPage() {
-  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, deleteCandidates, importCandidates, addConnection, deleteConnection, loadEventData, event: batch } = useApp();
+  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, deleteCandidates, importCandidates, addConnection, deleteConnection, event: batch } = useApp();
   const { showToast } = useToast();
 
   // Filters
@@ -125,8 +125,6 @@ export default function MasterlistPage() {
   const [importModalData, setImportModalData] = useState<ImportModalData | null>(null);
   const [importing, setImporting] = useState(false);
 
-  // Co-invitee scan
-  const [scanning, setScanning] = useState(false);
 
   // Column visibility (extra columns hidden by default)
   const [visibleExtraColumns, setVisibleExtraColumns] = useState<string[]>([]);
@@ -459,33 +457,6 @@ export default function MasterlistPage() {
     }
   }
 
-  // ── Co-invitee scan ───────────────────────────────────────────────────────────
-
-  async function handleScanCoInvitees() {
-    if (!batch.id || scanning) return;
-    setScanning(true);
-    try {
-      const res = await fetch("/api/connections/auto", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId: batch.id }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Scan failed");
-      await loadEventData(batch.id);
-      showToast(
-        data.detected > 0
-          ? `Found ${data.detected} co-invitee connection${data.detected !== 1 ? "s" : ""}`
-          : "No new co-invitee connections found",
-        data.detected > 0 ? "success" : "info"
-      );
-    } catch {
-      showToast("Scan failed — try again", "error");
-    } finally {
-      setScanning(false);
-    }
-  }
-
   // ── Render ───────────────────────────────────────────────────────────────────
 
   const totalCols = 8 + activeExtraCols.length;
@@ -522,13 +493,7 @@ export default function MasterlistPage() {
             </svg>
             Export
           </button>
-          <button className="btn btn-secondary" onClick={handleScanCoInvitees} disabled={scanning} title="Detect candidates who share the same inviter and auto-connect them">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            {scanning ? "Scanning…" : "Scan Inviters"}
-          </button>
-          <button className="btn btn-primary" onClick={openNew}>
+<button className="btn btn-primary" onClick={openNew}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
             </svg>

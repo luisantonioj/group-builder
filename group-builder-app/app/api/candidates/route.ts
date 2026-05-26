@@ -3,6 +3,8 @@ import { requireOrgSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { hmac } from "@/lib/crypto";
 import { z } from "zod";
+import { deriveCoInviteeConnections } from "@/lib/conflict-detection";
+import type { Candidate } from "@/types";
 
 const CreateSchema = z.object({
   fullName: z.string().min(1),
@@ -109,6 +111,29 @@ export async function POST(req: NextRequest) {
         shepherdNotesEnc: data.shepherdNotes ?? null,
       },
     });
+    // Co-invitee scan: connect this new candidate with others sharing the same inviter
+    if (candidate.inviterName) {
+      const allCandidates = await prisma.candidate.findMany({ where: { eventId: data.eventId } });
+      const coConns = deriveCoInviteeConnections(allCandidates as unknown as Candidate[]);
+      for (const conn of coConns) {
+        try {
+          await prisma.connection.upsert({
+            where: { fromId_toId: { fromId: conn.fromId, toId: conn.toId } },
+            update: {},
+            create: {
+              fromId: conn.fromId,
+              toId: conn.toId,
+              relationshipType: conn.relationshipType,
+              source: "AUTO",
+              note: conn.note,
+            },
+          });
+        } catch {
+          // skip constraint errors
+        }
+      }
+    }
+
     return NextResponse.json({ data: candidate }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to create candidate" }, { status: 500 });
