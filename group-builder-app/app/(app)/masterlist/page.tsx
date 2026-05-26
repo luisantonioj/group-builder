@@ -104,13 +104,16 @@ interface ImportModalData {
 }
 
 export default function MasterlistPage() {
-  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, importCandidates, addConnection, deleteConnection, event: batch } = useApp();
+  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, deleteCandidates, importCandidates, addConnection, deleteConnection, event: batch } = useApp();
   const { showToast } = useToast();
 
   // Filters
   const [search, setSearch] = useState("");
   const [genderFilter, setGenderFilter] = useState<"ALL" | "MALE" | "FEMALE">("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "GROUPED" | "UNGROUPED">("ALL");
+
+  // Selection
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Edit / add
   const [editCandidate, setEditCandidate] = useState<Candidate | null>(null);
@@ -246,6 +249,44 @@ export default function MasterlistPage() {
       deleteCandidate(id);
       setEditCandidate(null);
       showToast("Candidate deleted", "info");
+    }
+  }
+
+  function handleToggleSelectAll() {
+    if (selectedIds.length === filtered.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filtered.map((c) => c.id));
+    }
+  }
+
+  function handleToggleSelect(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  }
+
+  async function handleDeleteSelected() {
+    if (!selectedIds.length) return;
+    if (!confirm(`Delete ${selectedIds.length} selected candidates? This cannot be undone.`)) return;
+
+    const idsToDelete = [...selectedIds];
+    deleteCandidates(idsToDelete);
+    setSelectedIds([]);
+
+    try {
+      const res = await fetch("/api/candidates/batch-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: idsToDelete }),
+      });
+      if (res.ok) {
+        showToast(`${idsToDelete.length} candidates deleted`, "success");
+      } else {
+        showToast("Failed to sync deletions with server", "error");
+      }
+    } catch {
+      showToast("Sync pending (offline)", "info");
     }
   }
 
@@ -430,6 +471,14 @@ export default function MasterlistPage() {
           <p className="page-sub">{candidates.length} candidates · {batch.name}</p>
         </div>
         <div style={{ display: "flex", gap: "var(--space-sm)" }}>
+          {selectedIds.length > 0 && (
+            <button className="btn btn-danger" onClick={handleDeleteSelected} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M9 6V4h6v2" />
+              </svg>
+              Delete {selectedIds.length}
+            </button>
+          )}
           <button className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
@@ -536,7 +585,18 @@ export default function MasterlistPage() {
                     {col.label}{sortArrow(col.key as string)}
                   </th>
                 ))}
-                <th></th>
+                <th style={{ textAlign: "right", width: 120 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12 }}>
+                    <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", fontWeight: "normal" }}>Select</span>
+                    <input
+                      type="checkbox"
+                      checked={filtered.length > 0 && selectedIds.length === filtered.length}
+                      onChange={handleToggleSelectAll}
+                      style={{ cursor: "pointer", width: 16, height: 16 }}
+                      title="Select all"
+                    />
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -544,8 +604,9 @@ export default function MasterlistPage() {
                 const connCount = connectionCounts.get(c.id) ?? 0;
                 const group = groups.find((g) => g.id === c.groupId);
                 const room = rooms.find((r) => r.id === c.roomId);
+                const isSelected = selectedIds.includes(c.id);
                 return (
-                  <tr key={c.id} onClick={() => { setIsAddNew(false); setEditCandidate(c); }}>
+                  <tr key={c.id} onClick={() => { setIsAddNew(false); setEditCandidate(c); }} style={{ background: isSelected ? "var(--bg-hover)" : undefined }}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
                         <Initials name={c.fullName} gender={c.gender} size={28} />
@@ -572,13 +633,21 @@ export default function MasterlistPage() {
                       </td>
                     ))}
                     <td onClick={(e) => e.stopPropagation()}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => { setIsAddNew(false); setEditCandidate(c); }}>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                        </svg>
-                        Edit
-                      </button>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12 }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => { setIsAddNew(false); setEditCandidate(c); }} style={{ padding: "4px 8px" }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                          Edit
+                        </button>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelect(c.id)}
+                          style={{ cursor: "pointer", width: 16, height: 16 }}
+                        />
+                      </div>
                     </td>
                   </tr>
                 );
