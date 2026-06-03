@@ -384,7 +384,12 @@ export function AppProvider({
     dispatch({ type: "SET_CANDIDATES", payload: [...candidates, ...state.candidates] });
     addActivity(`Imported ${candidates.length} candidates`, "candidate", "imported");
     // API call for import is usually handled by the page directly for better progress tracking,
-    // but we ensure store is consistent.
+    // but we ensure store is consistent and data is enqueued if server call fails.
+    // However, since handleImportConfirm does its own fetch, we primarily use this for optimistic UI.
+    // To ensure persistence if page is refreshed before server responds:
+    Promise.all(candidates.map(c => enqueueSync({ action: "create", entity: "candidate", entityId: c.id, payload: c }))).then(() => {
+      flushSyncQueue();
+    });
   }, [state.candidates, addActivity]);
 
   const addConnection = useCallback((conn: Connection) => {

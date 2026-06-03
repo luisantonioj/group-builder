@@ -407,13 +407,12 @@ export default function MasterlistPage() {
       }
     }
 
-    // All entries already exist — exit early without touching the store
     if (freshCandidates.length === 0) {
       const n = skippedDupes.length;
       showToast(
         n > 0
-          ? `All ${n} entr${n !== 1 ? "ies" : "y"} already exist — nothing imported.`
-          : "No valid candidates found in the file.",
+          ? `All ${n} candidates in file already exist in the masterlist.`
+          : "No valid candidates found in the file (check if 'Full Name' is mapped).",
         "info"
       );
       setImportModalData(null);
@@ -431,25 +430,28 @@ export default function MasterlistPage() {
     };
 
     try {
-      // For the server-side, we need to send the final parsed candidates or the original rows + mapping.
-      // Since we already did the review, it's better to send the final parsed list if the API supports it,
-      // but let's stick to the existing API contract for safety and just update the mapping if needed.
-      // Actually, the user might have changed Genders in the review step.
-      // We should update the API to handle the final parsed list or adjust the rows before sending.
-      // Let's send the rows but with an extra field if the API allows it, or just send the final objects.
+      // For the server-side, we send the original rows but only for those that passed the name check.
+      // This ensures indices align with the 'parsed' array from the review step.
+      const sanitizedRows: Record<string, unknown>[] = [];
+      
+      importModalData.rows.forEach((row) => {
+        const fullName = typeof row[mapping["fullName"]] === "string" ? sanitizeCell(row[mapping["fullName"]]) : "";
+        if (!fullName) return;
 
-      // Re-map rows to include any gender changes from the review step if we were to stay with the current API.
-      // However, it's cleaner to just update the rows in memory.
-      const sanitizedRows = importModalData.rows.map((row, idx) => {
         const clean: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(row)) clean[k] = typeof v === "string" ? sanitizeCell(v) : v;
-        // Inject the chosen gender back into the row so the API picks it up
+        for (const [k, v] of Object.entries(row)) {
+          clean[k] = typeof v === "string" ? sanitizeCell(v) : v;
+        }
+        sanitizedRows.push(clean);
+      });
+
+      // Now inject the genders chosen/corrected in the Review stage
+      sanitizedRows.forEach((row, idx) => {
         const finalCandidate = parsed[idx];
         if (finalCandidate) {
           const genderCol = mapping["gender"] || "Imported Gender";
-          clean[genderCol] = finalCandidate.gender;
+          row[genderCol] = finalCandidate.gender;
         }
-        return clean;
       });
 
       const res = await fetch("/api/candidates/import", {

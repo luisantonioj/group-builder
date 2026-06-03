@@ -73,8 +73,9 @@ export async function POST(req: NextRequest) {
   const data = parsed.data;
 
   // Verify the event belongs to this org
+  let event;
   try {
-    const event = await prisma.event.findFirst({
+    event = await prisma.event.findFirst({
       where: { id: data.eventId, orgId: session.orgId },
     });
     if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
@@ -98,6 +99,7 @@ export async function POST(req: NextRequest) {
     const candidate = await prisma.candidate.create({
       data: {
         ...data,
+        yeBatch: event.name,
         contactHash,
         birthdayEnc:      data.birthday      ?? null,
         addressEnc:       data.address       ?? null,

@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
           school: sanitize(col("school")) || null,
           inviterName: inviterRaw,
           howHeard: sanitize(col("howHeard")) || null,
-          yeBatch: eventId,
+          yeBatch: event.name,
           birthdayEnc: encField(col("birthday")),
           addressEnc: encField(col("address")),
           facebookEnc: encField(col("facebook")),
