@@ -399,17 +399,25 @@ export function AppProvider({
     });
   }, [addActivity]);
 
-  const updateCandidate = useCallback((candidate: Candidate) => {
+  const updateCandidate = useCallback(async (candidate: Candidate) => {
     dispatch({ type: "UPDATE_CANDIDATE", payload: candidate });
     
-    // Update local table immediately for persistence
+    // 1. Update local table immediately for persistence
     import("./dexie").then(({ db }) => {
       if (db) db.candidates.put(candidate);
     });
 
-    enqueueSync({ action: "update", entity: "candidate", entityId: candidate.id, payload: candidate }).then(() => {
-      flushSyncQueue();
-    });
+    // 2. Immediate API sync for robustness
+    try {
+      await fetch(`/api/candidates/${candidate.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(candidate),
+      });
+    } catch {
+      // If immediate sync fails (e.g. offline), fallback to queue
+      enqueueSync({ action: "update", entity: "candidate", entityId: candidate.id, payload: candidate });
+    }
   }, []);
 
   const deleteCandidate = useCallback((id: string) => {

@@ -623,9 +623,11 @@ export default function MasterlistPage() {
                       <input
                         type="checkbox"
                         checked={c.isConfirmed}
-                        onChange={(e) => {
-                          updateCandidate({ ...c, isConfirmed: e.target.checked });
-                          showToast(`${c.fullName} ${e.target.checked ? "confirmed" : "unconfirmed"}`, "info");
+                        onChange={async (e) => {
+                          const checked = e.target.checked;
+                          // Update local state and trigger sync
+                          updateCandidate({ ...c, isConfirmed: checked });
+                          showToast(`${c.fullName} ${checked ? "confirmed" : "unconfirmed"}`, "info");
                         }}
                         style={{ cursor: "pointer", width: 18, height: 18 }}
                         title={c.isConfirmed ? "Mark as unconfirmed" : "Mark as confirmed"}
