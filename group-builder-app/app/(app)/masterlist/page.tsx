@@ -702,12 +702,12 @@ export default function MasterlistPage() {
       {/* Import column-mapping modal */}
       {importModalData && (
         <ImportModal
+          key={importModalData.rows.length + '-' + importModalData.headers.join(',')}
           headers={importModalData.headers} rows={importModalData.rows}
           initialMapping={importModalData.mapping} importing={importing}
           onClose={() => setImportModalData(null)} onConfirm={handleImportConfirm}
         />
       )}
-
       {/* Column visibility modal */}
       {columnModalOpen && (
         <ColumnModal
@@ -862,6 +862,9 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
 
   const canProceed = !!mapping["fullName"];
 
+  // Preview of the first 3 rows to help user verify the file
+  const previewRows = useMemo(() => rows.slice(0, 3), [rows]);
+
   function handleGoToReview() {
     const getRaw = (row: Record<string, unknown>, field: string): string => {
       const col = mapping[field];
@@ -882,7 +885,6 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
       let gender: Gender = "MALE";
       if (genderRaw.startsWith("F")) gender = "FEMALE";
       else if (genderRaw.startsWith("M")) gender = "MALE";
-      // If gender was not mapped or is empty, we'll let user select in review stage
 
       const ageStr = getRaw(row, "age");
       return {
@@ -956,29 +958,57 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
       }
     >
       {stage === "mapping" ? (
-        <>
-          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-lg)" }}>
-            Match each system field to the corresponding column in your spreadsheet.
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-            {SYSTEM_FIELDS.map(({ key, label, required }) => (
-              <div key={key} style={{ display: "grid", gridTemplateColumns: "160px 1fr", alignItems: "center", gap: "var(--space-md)" }}>
-                <label style={{ fontSize: "var(--font-size-sm)", color: required ? "var(--text-primary)" : "var(--text-secondary)", fontWeight: required ? "var(--font-weight-semibold)" : undefined }}>
-                  {label}{required && <span style={{ color: "var(--color-danger)", marginLeft: 2 }}>*</span>}
-                </label>
-                <select
-                  className="input"
-                  value={mapping[key] ?? ""}
-                  onChange={(e) => setMapping(prev => ({ ...prev, [key]: e.target.value }))}
-                  style={{ fontSize: "var(--font-size-sm)" }}
-                >
-                  <option value="">— Skip —</option>
-                  {headers.map((h) => <option key={h} value={h}>{h}</option>)}
-                </select>
-              </div>
-            ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-xl)" }}>
+          <div>
+            <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-lg)" }}>
+              Match each system field to the corresponding column in your spreadsheet.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+              {SYSTEM_FIELDS.map(({ key, label, required }) => (
+                <div key={key} style={{ display: "grid", gridTemplateColumns: "160px 1fr", alignItems: "center", gap: "var(--space-md)" }}>
+                  <label style={{ fontSize: "var(--font-size-sm)", color: required ? "var(--text-primary)" : "var(--text-secondary)", fontWeight: required ? "var(--font-weight-semibold)" : undefined }}>
+                    {label}{required && <span style={{ color: "var(--color-danger)", marginLeft: 2 }}>*</span>}
+                  </label>
+                  <select
+                    className="input"
+                    value={mapping[key] ?? ""}
+                    onChange={(e) => setMapping(prev => ({ ...prev, [key]: e.target.value }))}
+                    style={{ fontSize: "var(--font-size-sm)" }}
+                  >
+                    <option value="">— Skip —</option>
+                    {headers.map((h) => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
           </div>
-        </>
+
+          <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "var(--space-lg)" }}>
+            <p style={{ fontSize: "var(--font-size-xs)", fontWeight: 600, color: "var(--text-muted)", marginBottom: "var(--space-sm)", textTransform: "uppercase", letterSpacing: "0.025em" }}>
+              File Preview (First 3 rows)
+            </p>
+            <div style={{ overflowX: "auto", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", background: "var(--bg-hover)" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                    {headers.map((h) => (
+                      <th key={h} style={{ textAlign: "left", padding: "6px 8px", background: "var(--bg-card)", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewRows.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: i < previewRows.length - 1 ? "1px solid var(--border-subtle)" : undefined }}>
+                      {headers.map((h) => (
+                        <td key={h} style={{ padding: "6px 8px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>{String(row[h] ?? "")}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       ) : (
         <>
           <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", marginBottom: "var(--space-lg)" }}>
