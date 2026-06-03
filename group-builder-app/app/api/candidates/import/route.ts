@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
     const fullName = sanitize(col("fullName"));
     const gender = sanitize(col("gender")).toUpperCase();
     const contact = sanitize(col("contact")) || null;
+    const isConfirmed = sanitize(col("isConfirmed")).toLowerCase() === "true" || sanitize(col("isConfirmed")).toLowerCase() === "yes" || sanitize(col("isConfirmed")).toLowerCase() === "confirmed";
     const id = sanitize(col("id")) || undefined;
 
     if (!fullName) continue;
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest) {
           fatherContactEnc: encField(col("fatherContact")),
           motherNameEnc: encField(col("motherName")),
           motherContactEnc: encField(col("motherContact")),
+          isConfirmed,
           eventId,
         },
       });
