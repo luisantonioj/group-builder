@@ -63,7 +63,7 @@ export default function GroupsPage() {
         if (genderFilter !== "ALL" && c.gender !== genderFilter) return false;
         if (search) {
           const q = search.toLowerCase();
-          return c.fullName.toLowerCase().includes(q) || c.school?.toLowerCase().includes(q);
+          return c.fullName.toLowerCase().includes(q) || (c.age !== null && String(c.age).includes(q));
         }
         return true;
       }),
@@ -499,7 +499,7 @@ function DraggableCard({ candidate: c, adjacency }: { candidate: Candidate; adja
       <Initials name={c.fullName} gender={c.gender} size={26} fontSize={10} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.fullName}</div>
-        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{c.school ?? "No school"}</div>
+        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{c.age !== null ? `Age: ${c.age}` : "Age unknown"}</div>
       </div>
       {degree > 0 && <Chip kind="warning">{degree}</Chip>}
     </div>
