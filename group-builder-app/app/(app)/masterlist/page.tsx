@@ -430,12 +430,13 @@ export default function MasterlistPage() {
         sanitizedRows.push(clean);
       });
 
-      // Now inject the genders chosen/corrected in the Review stage
+      // Now inject the genders chosen/corrected in the Review stage and the client-generated IDs
       sanitizedRows.forEach((row, idx) => {
         const finalCandidate = parsed[idx];
         if (finalCandidate) {
           const genderCol = mapping["gender"] || "Imported Gender";
           row[genderCol] = finalCandidate.gender;
+          row["id"] = finalCandidate.id;
         }
       });
 

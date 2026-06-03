@@ -57,6 +57,12 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    // Manually nullify roomId for candidates in this room to avoid constraint errors
+    await prisma.candidate.updateMany({
+      where: { roomId: params.id },
+      data: { roomId: null },
+    });
+
     await prisma.room.delete({ where: { id: params.id } });
     return NextResponse.json({ message: "Deleted" });
   } catch {

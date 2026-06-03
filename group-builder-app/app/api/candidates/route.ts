@@ -7,6 +7,7 @@ import { deriveCoInviteeConnections } from "@/lib/conflict-detection";
 import type { Candidate } from "@/types";
 
 const CreateSchema = z.object({
+  id: z.string().optional(),
   fullName: z.string().min(1),
   lastName: z.string().min(1),
   firstName: z.string().min(1),

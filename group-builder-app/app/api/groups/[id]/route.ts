@@ -58,8 +58,12 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    // Candidates in this group will have their groupId nullified by Prisma if onDelete: SetNull is configured
-    // or we might need to do it manually if not. Assuming standard schema.
+    // Manually nullify groupId for candidates in this group to avoid constraint errors
+    await prisma.candidate.updateMany({
+      where: { groupId: params.id },
+      data: { groupId: null },
+    });
+
     await prisma.group.delete({ where: { id: params.id } });
     return NextResponse.json({ message: "Deleted" });
   } catch {

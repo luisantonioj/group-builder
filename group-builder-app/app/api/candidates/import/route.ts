@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
     const fullName = sanitize(col("fullName"));
     const gender = sanitize(col("gender")).toUpperCase();
     const contact = sanitize(col("contact")) || null;
+    const id = sanitize(col("id")) || undefined;
 
     if (!fullName) continue;
 
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
     try {
       const candidate = await prisma.candidate.create({
         data: {
+          id,
           fullName,
           lastName,
           firstName,

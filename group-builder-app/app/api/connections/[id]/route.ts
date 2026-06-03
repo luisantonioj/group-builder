@@ -16,7 +16,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   if (!conn) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { from, to, createdAt, ...updateData } = body;
+  const { id: _, from, to, createdAt, ...updateData } = body;
 
   const updated = await prisma.connection.update({
     where: { id },

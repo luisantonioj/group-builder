@@ -83,8 +83,11 @@ export async function flushSyncQueue(onProgress?: (pending: number) => void) {
         if (res.ok && item.id != null) {
           await db.syncQueue.delete(item.id);
         } else if (!res.ok) {
-          // Increment retry count; give up after 3
-          if (item.retries >= 3 && item.id != null) {
+          const isTransient = res.status >= 500 || res.status === 429;
+          const maxRetries = isTransient ? 10 : 3;
+
+          if (item.retries >= maxRetries && item.id != null) {
+            // Only give up and delete if it's a non-transient error or we've exhausted retries
             await db.syncQueue.delete(item.id);
           } else if (item.id != null) {
             await db.syncQueue.update(item.id, { retries: item.retries + 1 });

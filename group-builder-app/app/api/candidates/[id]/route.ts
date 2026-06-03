@@ -29,9 +29,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+    // Strip read-only or restricted fields
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { id, eventId, createdAt, updatedAt, timestamp, ...updateData } = body;
+
     const updated = await prisma.candidate.update({
       where: { id: params.id },
-      data: body,
+      data: updateData,
     });
     return NextResponse.json({ data: updated });
   } catch {
