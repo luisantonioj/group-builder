@@ -152,6 +152,8 @@ model Candidate {
   allergiesEnc     String?  // flagged visually on cards
   shepherdNotesEnc String?  // internal only
 
+  isConfirmed      Boolean  @default(false)
+
   // Assignments
   groupId String?
   roomId  String?

@@ -16,6 +16,7 @@ type SortConfig = { key: string; dir: "asc" | "desc" };
 
 // Extra columns: hidden by default, toggleable via Columns modal
 const EXTRA_COLUMNS: { key: keyof Candidate; label: string }[] = [
+  { key: "isConfirmed",   label: "Confirmed" },
   { key: "school",        label: "School / Work" },
   { key: "contact",       label: "Contact" },
   { key: "birthday",      label: "Birthday" },
@@ -51,6 +52,7 @@ function sanitizeCell(val: unknown): string {
 
 const SYSTEM_FIELDS: { key: string; label: string; required?: boolean }[] = [
   { key: "fullName",      label: "Full Name",      required: true },
+  { key: "isConfirmed",   label: "Confirmed (Yes/No)" },
   { key: "gender",        label: "Gender" },
   { key: "age",           label: "Age" },
   { key: "birthday",      label: "Birthday" },
@@ -308,6 +310,7 @@ export default function MasterlistPage() {
       fatherName: null, fatherContact: null,
       motherName: null, motherContact: null,
       allergies: null, shepherdNotes: null,
+      isConfirmed: false,
       groupId: null, roomId: null,
       eventId: batch.id,
       createdAt: new Date().toISOString(),
@@ -580,6 +583,7 @@ export default function MasterlistPage() {
           <table>
             <thead>
               <tr>
+                <th style={{ width: 60, textAlign: "center" }}>Conf.</th>
                 <th style={thSort} onClick={() => handleSort("fullName")}>Name{sortArrow("fullName")}</th>
                 <th style={thSort} onClick={() => handleSort("gender")}>Gender{sortArrow("gender")}</th>
                 <th style={thSort} onClick={() => handleSort("age")}>Age{sortArrow("age")}</th>
@@ -615,6 +619,18 @@ export default function MasterlistPage() {
                 const isSelected = selectedIds.includes(c.id);
                 return (
                   <tr key={c.id} onClick={() => { setIsAddNew(false); setEditCandidate(c); }} style={{ background: isSelected ? "var(--bg-hover)" : undefined }}>
+                    <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={c.isConfirmed}
+                        onChange={(e) => {
+                          updateCandidate({ ...c, isConfirmed: e.target.checked });
+                          showToast(`${c.fullName} ${e.target.checked ? "confirmed" : "unconfirmed"}`, "info");
+                        }}
+                        style={{ cursor: "pointer", width: 18, height: 18 }}
+                        title={c.isConfirmed ? "Mark as unconfirmed" : "Mark as confirmed"}
+                      />
+                    </td>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
                         <Initials name={c.fullName} gender={c.gender} size={28} />
@@ -875,6 +891,9 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
       if (genderRaw.startsWith("F")) gender = "FEMALE";
       else if (genderRaw.startsWith("M")) gender = "MALE";
 
+      const confirmedRaw = getRaw(row, "isConfirmed").toLowerCase();
+      const isConfirmed = confirmedRaw === "yes" || confirmedRaw === "true" || confirmedRaw === "confirmed";
+
       const ageStr = getRaw(row, "age");
       return {
         id: `import-${Date.now()}-${i}`,
@@ -893,7 +912,9 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
         motherName: getRaw(row, "motherName") || null,
         motherContact: getRaw(row, "motherContact") || null,
         allergies: getRaw(row, "allergies") || null,
-        shepherdNotes: null, groupId: null, roomId: null,
+        shepherdNotes: null, 
+        isConfirmed,
+        groupId: null, roomId: null,
         eventId: batch.id, createdAt: now, updatedAt: now,
       };
     }).filter((c): c is Candidate => c !== null);
@@ -1244,6 +1265,23 @@ function CandidateModal({
               <label className="form-label">Food Allergies / Dietary Needs</label>
               <input className="input" value={form.allergies ?? ""} onChange={(e) => set("allergies", e.target.value || null)} placeholder="e.g. Nuts, shellfish (leave blank if none)" />
               {form.allergies && <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-warning)", marginTop: 2 }}>⚠ This will be flagged on the candidate card and in reports.</p>}
+            </div>
+
+            <div className="form-group" style={{ marginTop: "var(--space-md)", background: "var(--bg-hover)", padding: "var(--space-md)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-default)" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={form.isConfirmed}
+                  onChange={(e) => set("isConfirmed", e.target.checked)}
+                  style={{ width: 18, height: 18, cursor: "pointer" }}
+                />
+                <span style={{ fontWeight: "var(--font-weight-semibold)", fontSize: "var(--font-size-sm)" }}>
+                  Confirmed Participant
+                </span>
+              </label>
+              <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-secondary)", marginTop: 4, marginLeft: 26 }}>
+                Confirmed candidates appear with normal UI. Unconfirmed candidates will have a black outline in the grouping screens.
+              </p>
             </div>
           </div>
         )}

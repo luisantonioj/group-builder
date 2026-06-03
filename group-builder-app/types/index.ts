@@ -91,6 +91,7 @@ export interface Candidate {
   motherContact: string | null;
   allergies: string | null;
   shepherdNotes: string | null;
+  isConfirmed: boolean;
   // Assignments
   groupId: string | null;
   roomId: string | null;
