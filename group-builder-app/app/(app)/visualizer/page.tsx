@@ -8,16 +8,22 @@ import Initials from "@/components/ui/initials";
 import Modal from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { formatConnectionLabel } from "@/lib/utils";
+import type { Connection } from "@/types";
 
 type Tab = "graph" | "clusters" | "table";
+type Filter = "all" | "unassigned" | "conflicts";
 
 export default function VisualizerPage() {
-  const { candidates, connections, adjacency, allConflicts, addConnection } = useApp();
+  const { candidates, connections, adjacency, allConflicts, addConnection, updateConnection, deleteConnection } = useApp();
   const { showToast } = useToast();
   const [tab, setTab] = useState<Tab>("graph");
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "unassigned" | "conflicts">("all");
+  const [filter, setFilter] = useState<Filter>("all");
   const [addConnOpen, setAddConnOpen] = useState(false);
+
+  // Edit connection state
+  const [editConn, setEditConn] = useState<Connection | null>(null);
+
   const [newConn, setNewConn] = useState({
     fromId: "",
     toId: "",
@@ -608,6 +614,7 @@ export default function VisualizerPage() {
                   <th>Relationship</th>
                   <th>Source</th>
                   <th>Note</th>
+                  <th style={{ textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -631,6 +638,34 @@ export default function VisualizerPage() {
                     </td>
                     <td style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
                       {conn.note ?? "—"}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                        <button
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => setEditConn(conn)}
+                          title="Edit connection"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </button>
+                        <button
+                          className="btn btn-sm btn-ghost"
+                          style={{ color: "var(--color-danger)" }}
+                          onClick={() => {
+                            if (confirm(`Delete connection between ${conn.fromName} and ${conn.toName}?`)) {
+                              deleteConnection(conn.id);
+                              showToast("Connection deleted.", "info");
+                            }
+                          }}
+                          title="Delete connection"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
+                          </svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -714,6 +749,82 @@ export default function VisualizerPage() {
             />
           </div>
         </div>
+      </Modal>
+
+      {/* ── Edit Connection Modal ──────────────────────────────────────────────── */}
+      <Modal
+        open={!!editConn}
+        title="Edit Connection"
+        onClose={() => setEditConn(null)}
+        footer={
+          <>
+            <button className="btn btn-secondary" onClick={() => setEditConn(null)}>Cancel</button>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                if (editConn) {
+                  updateConnection(editConn);
+                  setEditConn(null);
+                  showToast("Connection updated.", "success");
+                }
+              }}
+            >
+              Save Changes
+            </button>
+          </>
+        }
+      >
+        {editConn && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+            <div style={{ display: "flex", gap: "var(--space-md)", alignItems: "center", marginBottom: "var(--space-sm)" }}>
+              <div style={{ flex: 1 }}>
+                <label className="form-label">From</label>
+                <div className="input" style={{ background: "var(--bg-hover)", opacity: 0.8 }}>{editConn.fromName}</div>
+              </div>
+              <div style={{ marginTop: "var(--space-md)", fontSize: "var(--font-size-xl)" }}>↔</div>
+              <div style={{ flex: 1 }}>
+                <label className="form-label">To</label>
+                <div className="input" style={{ background: "var(--bg-hover)", opacity: 0.8 }}>{editConn.toName}</div>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Relationship Type</label>
+              <select
+                className="input"
+                value={editConn.relationshipType}
+                onChange={(e) => setEditConn({ 
+                  ...editConn, 
+                  relationshipType: e.target.value as any,
+                  source: "MANUAL" // If user edited an AUTO connection, it becomes MANUAL
+                })}
+              >
+                <option value="BARKADA">Barkada / Friend</option>
+                <option value="CLASSMATE">Classmate</option>
+                <option value="SIBLING">Sibling</option>
+                <option value="COUSIN">Cousin</option>
+                <option value="RELATION">Other Relative</option>
+                <option value="OTHER">Other</option>
+              </select>
+              {editConn.source === "AUTO" && (
+                <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 4 }}>
+                  Changing this will convert it to a manual connection.
+                </p>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Notes</label>
+              <textarea
+                className="input"
+                rows={3}
+                value={editConn.note ?? ""}
+                onChange={(e) => setEditConn({ ...editConn, note: e.target.value || null, source: "MANUAL" })}
+                placeholder="e.g. Same barangay"
+              />
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

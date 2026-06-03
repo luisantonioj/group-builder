@@ -106,7 +106,7 @@ interface ImportModalData {
 }
 
 export default function MasterlistPage() {
-  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, deleteCandidates, importCandidates, addConnection, confirmConnection, deleteConnection, event: batch } = useApp();
+  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, deleteCandidates, importCandidates, addConnection, updateConnection, confirmConnection, deleteConnection, event: batch } = useApp();
   const { showToast } = useToast();
 
   // Filters
@@ -313,21 +313,6 @@ export default function MasterlistPage() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
-  }
-
-  // ── Connection confirm handler ───────────────────────────────────────────────
-
-  async function handleConfirmConnection(id: string) {
-    confirmConnection(id); // optimistic update
-    try {
-      await fetch(`/api/connections/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirmed: true }),
-      });
-    } catch {
-      // silently ignore — optimistic is fine here
-    }
   }
 
   // ── Import handlers ───────────────────────────────────────────────────────────
@@ -694,7 +679,10 @@ export default function MasterlistPage() {
           groups={groups} rooms={rooms}
           candidates={candidates} connections={connections}
           onSave={handleSave} onDelete={handleDelete}
-          onAddConnection={addConnection} onConfirmConnection={handleConfirmConnection} onDeleteConnection={deleteConnection}
+          onAddConnection={addConnection} 
+          onUpdateConnection={updateConnection}
+          onConfirmConnection={confirmConnection} 
+          onDeleteConnection={deleteConnection}
           onClose={() => { setEditCandidate(null); setIsAddNew(false); }}
         />
       )}
@@ -1056,7 +1044,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
 
 function CandidateModal({
   candidate: initial, isNew, groups, rooms, candidates, connections,
-  onSave, onDelete, onClose, onAddConnection, onConfirmConnection, onDeleteConnection,
+  onSave, onDelete, onClose, onAddConnection, onUpdateConnection, onConfirmConnection, onDeleteConnection,
 }: {
   candidate: Candidate;
   isNew: boolean;
@@ -1068,6 +1056,7 @@ function CandidateModal({
   onDelete: (id: string) => void;
   onClose: () => void;
   onAddConnection: (conn: Connection) => void;
+  onUpdateConnection: (conn: Connection) => void;
   onConfirmConnection: (id: string) => void;
   onDeleteConnection: (id: string) => void;
 }) {
@@ -1079,6 +1068,9 @@ function CandidateModal({
   const [connSearch, setConnSearch] = useState("");
   const [connSelectedId, setConnSelectedId] = useState<string | null>(null);
   const [connRelType, setConnRelType] = useState<RelationshipType>("BARKADA");
+
+  // Edit connection state
+  const [editConn, setEditConn] = useState<Connection | null>(null);
 
   const myConnections = connections.filter(
     (c) => c.fromId === initial.id || c.toId === initial.id
@@ -1429,21 +1421,34 @@ function CandidateModal({
                           <Chip kind={conn.source === "AUTO" ? "accent" : "default"}>
                             {conn.source.toLowerCase()}
                           </Chip>
-                          {conn.source === "MANUAL" && (
-                            <button
-                              type="button"
-                              title="Remove connection"
-                              onClick={() => onDeleteConnection(conn.id)}
-                              style={{
-                                background: "none", border: "none", cursor: "pointer",
-                                padding: 4, color: "var(--text-muted)", display: "flex", alignItems: "center",
-                              }}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
-                              </svg>
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-ghost"
+                            onClick={() => setEditConn(conn)}
+                            title="Edit connection"
+                            style={{ padding: 4, display: "flex", alignItems: "center" }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            title="Remove connection"
+                            onClick={() => {
+                              if (confirm(`Delete connection with ${otherName}?`)) {
+                                onDeleteConnection(conn.id);
+                              }
+                            }}
+                            style={{
+                              background: "none", border: "none", cursor: "pointer",
+                              padding: 4, color: "var(--text-muted)", display: "flex", alignItems: "center",
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4h6v2" />
+                            </svg>
+                          </button>
                         </>
                       )}
                     </div>
@@ -1453,6 +1458,82 @@ function CandidateModal({
             </div>
           </div>
         )}
+
+        {/* ── Edit Connection Modal ──────────────────────────────────────────────── */}
+        <Modal
+          open={!!editConn}
+          title="Edit Connection"
+          onClose={() => setEditConn(null)}
+          footer={
+            <>
+              <button type="button" className="btn btn-secondary" onClick={() => setEditConn(null)}>Cancel</button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  if (editConn) {
+                    onUpdateConnection(editConn);
+                    setEditConn(null);
+                  }
+                }}
+              >
+                Save Changes
+              </button>
+            </>
+          }
+        >
+          {editConn && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+              <div style={{ display: "flex", gap: "var(--space-md)", alignItems: "center", marginBottom: "var(--space-sm)" }}>
+                <div style={{ flex: 1 }}>
+                  <label className="form-label">From</label>
+                  <div className="input" style={{ background: "var(--bg-hover)", opacity: 0.8 }}>{editConn.fromName}</div>
+                </div>
+                <div style={{ marginTop: "var(--space-md)", fontSize: "var(--font-size-xl)" }}>↔</div>
+                <div style={{ flex: 1 }}>
+                  <label className="form-label">To</label>
+                  <div className="input" style={{ background: "var(--bg-hover)", opacity: 0.8 }}>{editConn.toName}</div>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Relationship Type</label>
+                <select
+                  className="input"
+                  value={editConn.relationshipType}
+                  onChange={(e) => setEditConn({ 
+                    ...editConn, 
+                    relationshipType: e.target.value as any,
+                    source: "MANUAL" 
+                  })}
+                >
+                  <option value="BARKADA">Barkada / Friend</option>
+                  <option value="CLASSMATE">Classmate</option>
+                  <option value="SIBLING">Sibling</option>
+                  <option value="COUSIN">Cousin</option>
+                  <option value="RELATION">Other Relative</option>
+                  <option value="OTHER">Other</option>
+                </select>
+                {editConn.source === "AUTO" && (
+                  <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 4 }}>
+                    Changing this will convert it to a manual connection.
+                  </p>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Notes</label>
+                <textarea
+                  className="input"
+                  rows={3}
+                  value={editConn.note ?? ""}
+                  onChange={(e) => setEditConn({ ...editConn, note: e.target.value || null, source: "MANUAL" })}
+                  placeholder="e.g. Same barangay"
+                />
+              </div>
+            </div>
+          )}
+        </Modal>
 
         {/* ── Shepherd notes ──────────────────────────────────────────────── */}
         {tab === "shepherd-notes" && (

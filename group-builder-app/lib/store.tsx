@@ -46,6 +46,7 @@ type Action =
   | { type: "DELETE_CANDIDATE"; payload: string }
   | { type: "DELETE_CANDIDATES"; payload: string[] }
   | { type: "ADD_CONNECTION"; payload: Connection }
+  | { type: "UPDATE_CONNECTION"; payload: Connection }
   | { type: "CONFIRM_CONNECTION"; payload: string }
   | { type: "DELETE_CONNECTION"; payload: string }
   | { type: "ADD_GROUP"; payload: Group }
@@ -117,6 +118,13 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case "ADD_CONNECTION":
       return { ...state, connections: [...state.connections, action.payload] };
+    case "UPDATE_CONNECTION":
+      return {
+        ...state,
+        connections: state.connections.map((c) =>
+          c.id === action.payload.id ? action.payload : c
+        ),
+      };
     case "CONFIRM_CONNECTION":
       return {
         ...state,
@@ -233,6 +241,7 @@ interface AppContextValue extends AppState {
   deleteCandidates: (ids: string[]) => void;
   importCandidates: (candidates: Candidate[]) => void;
   addConnection: (conn: Connection) => void;
+  updateConnection: (conn: Connection) => void;
   confirmConnection: (id: string) => void;
   deleteConnection: (id: string) => void;
   addGroup: (group: Group) => void;
@@ -400,6 +409,13 @@ export function AppProvider({
     });
   }, [addActivity]);
 
+  const updateConnection = useCallback((conn: Connection) => {
+    dispatch({ type: "UPDATE_CONNECTION", payload: conn });
+    enqueueSync({ action: "update", entity: "connection", entityId: conn.id, payload: conn }).then(() => {
+      flushSyncQueue();
+    });
+  }, []);
+
   const confirmConnection = useCallback((id: string) => {
     dispatch({ type: "CONFIRM_CONNECTION", payload: id });
     enqueueSync({ action: "update", entity: "connection", entityId: id, payload: { confirmed: true } }).then(() => {
@@ -531,6 +547,7 @@ export function AppProvider({
     deleteCandidates,
     importCandidates,
     addConnection,
+    updateConnection,
     confirmConnection,
     deleteConnection,
     addGroup,
