@@ -1116,7 +1116,13 @@ function CandidateModal({
 
   // ── Form helpers ─────────────────────────────────────────────────────────────
   function set(field: keyof Candidate, value: unknown) {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      let finalValue = value;
+      if (field === "gender" && typeof value === "string") {
+        finalValue = value.toUpperCase();
+      }
+      return { ...prev, [field]: finalValue };
+    });
   }
 
   function handleSubmit(e: React.FormEvent) {

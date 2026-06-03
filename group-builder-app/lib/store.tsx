@@ -388,6 +388,12 @@ export function AppProvider({
   const addCandidate = useCallback((candidate: Candidate) => {
     dispatch({ type: "ADD_CANDIDATE", payload: candidate });
     addActivity(`Added candidate: ${candidate.fullName}`, "candidate", "created");
+    
+    // Update local table immediately for persistence
+    import("./dexie").then(({ db }) => {
+      if (db) db.candidates.put(candidate);
+    });
+
     enqueueSync({ action: "create", entity: "candidate", entityId: candidate.id, payload: candidate }).then(() => {
       flushSyncQueue();
     });
@@ -395,6 +401,12 @@ export function AppProvider({
 
   const updateCandidate = useCallback((candidate: Candidate) => {
     dispatch({ type: "UPDATE_CANDIDATE", payload: candidate });
+    
+    // Update local table immediately for persistence
+    import("./dexie").then(({ db }) => {
+      if (db) db.candidates.put(candidate);
+    });
+
     enqueueSync({ action: "update", entity: "candidate", entityId: candidate.id, payload: candidate }).then(() => {
       flushSyncQueue();
     });
@@ -402,6 +414,15 @@ export function AppProvider({
 
   const deleteCandidate = useCallback((id: string) => {
     dispatch({ type: "DELETE_CANDIDATE", payload: id });
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) {
+        db.candidates.delete(id);
+        db.connections.where("fromId").equals(id).or("toId").equals(id).delete();
+      }
+    });
+
     enqueueSync({ action: "delete", entity: "candidate", entityId: id, payload: {} }).then(() => {
       flushSyncQueue();
     });
@@ -409,6 +430,15 @@ export function AppProvider({
 
   const deleteCandidates = useCallback((ids: string[]) => {
     dispatch({ type: "DELETE_CANDIDATES", payload: ids });
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) {
+        db.candidates.bulkDelete(ids);
+        db.connections.where("fromId").anyOf(ids).or("toId").anyOf(ids).delete();
+      }
+    });
+
     // Batch delete is handled individually in sync queue for simplicity
     Promise.all(ids.map(id => enqueueSync({ action: "delete", entity: "candidate", entityId: id, payload: {} }))).then(() => {
       flushSyncQueue();
@@ -418,9 +448,12 @@ export function AppProvider({
   const importCandidates = useCallback((candidates: Candidate[]) => {
     dispatch({ type: "SET_CANDIDATES", payload: [...candidates, ...state.candidates] });
     addActivity(`Imported ${candidates.length} candidates`, "candidate", "imported");
-    // API call for import is usually handled by the page directly for better progress tracking,
-    // but we ensure store is consistent and data is enqueued if server call fails.
-    // However, since handleImportConfirm does its own fetch, we primarily use this for optimistic UI.
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) db.candidates.bulkPut(candidates);
+    });
+
     // To ensure persistence if page is refreshed before server responds:
     Promise.all(candidates.map(c => enqueueSync({ action: "create", entity: "candidate", entityId: c.id, payload: c }))).then(() => {
       flushSyncQueue();
@@ -430,6 +463,12 @@ export function AppProvider({
   const addConnection = useCallback((conn: Connection) => {
     dispatch({ type: "ADD_CONNECTION", payload: conn });
     addActivity(`Added connection: ${conn.fromName} ↔ ${conn.toName}`, "connection", "created");
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) db.connections.put(conn);
+    });
+
     enqueueSync({ action: "create", entity: "connection", entityId: conn.id, payload: conn }).then(() => {
       flushSyncQueue();
     });
@@ -437,6 +476,12 @@ export function AppProvider({
 
   const updateConnection = useCallback((conn: Connection) => {
     dispatch({ type: "UPDATE_CONNECTION", payload: conn });
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) db.connections.put(conn);
+    });
+
     enqueueSync({ action: "update", entity: "connection", entityId: conn.id, payload: conn }).then(() => {
       flushSyncQueue();
     });
@@ -444,6 +489,12 @@ export function AppProvider({
 
   const confirmConnection = useCallback((id: string) => {
     dispatch({ type: "CONFIRM_CONNECTION", payload: id });
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) db.connections.update(id, { confirmed: true });
+    });
+
     enqueueSync({ action: "update", entity: "connection", entityId: id, payload: { confirmed: true } }).then(() => {
       flushSyncQueue();
     });
@@ -451,6 +502,12 @@ export function AppProvider({
 
   const deleteConnection = useCallback((id: string) => {
     dispatch({ type: "DELETE_CONNECTION", payload: id });
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) db.connections.delete(id);
+    });
+
     enqueueSync({ action: "delete", entity: "connection", entityId: id, payload: {} }).then(() => {
       flushSyncQueue();
     });
@@ -459,6 +516,12 @@ export function AppProvider({
   const addGroup = useCallback((group: Group) => {
     dispatch({ type: "ADD_GROUP", payload: group });
     addActivity(`Created group: ${group.name}`, "group", "created");
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) db.groups.put(group);
+    });
+
     enqueueSync({ action: "create", entity: "group", entityId: group.id, payload: group }).then(() => {
       flushSyncQueue();
     });
@@ -466,6 +529,12 @@ export function AppProvider({
 
   const updateGroup = useCallback((group: Group) => {
     dispatch({ type: "UPDATE_GROUP", payload: group });
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) db.groups.put(group);
+    });
+
     enqueueSync({ action: "update", entity: "group", entityId: group.id, payload: group }).then(() => {
       flushSyncQueue();
     });
@@ -473,6 +542,15 @@ export function AppProvider({
 
   const deleteGroup = useCallback((id: string) => {
     dispatch({ type: "DELETE_GROUP", payload: id });
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) {
+        db.groups.delete(id);
+        db.candidates.where("groupId").equals(id).modify({ groupId: null });
+      }
+    });
+
     enqueueSync({ action: "delete", entity: "group", entityId: id, payload: {} }).then(() => {
       flushSyncQueue();
     });
@@ -486,6 +564,12 @@ export function AppProvider({
       if (group) addActivity(`Assigned ${candidate.fullName} to ${group.name}`, "group", "assigned");
       else addActivity(`Removed ${candidate.fullName} from group`, "group", "removed");
     }
+
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) db.candidates.update(candidateId, { groupId });
+    });
+
     enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } }).then(() => {
       flushSyncQueue();
     });
@@ -501,6 +585,12 @@ export function AppProvider({
     const assignments = autoDistributeImpl(unassigned, groupsForDist, adjacency);
     assignments.forEach((groupId, candidateId) => {
       dispatch({ type: "ASSIGN_TO_GROUP", payload: { candidateId, groupId } });
+      
+      // Update local table immediately
+      import("./dexie").then(({ db }) => {
+        if (db) db.candidates.update(candidateId, { groupId });
+      });
+
       enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } });
     });
     flushSyncQueue();
@@ -511,6 +601,12 @@ export function AppProvider({
     state.candidates.forEach((c) => {
       if (c.groupId) {
         dispatch({ type: "ASSIGN_TO_GROUP", payload: { candidateId: c.id, groupId: null } });
+        
+        // Update local table immediately
+        import("./dexie").then(({ db }) => {
+          if (db) db.candidates.update(c.id, { groupId: null });
+        });
+
         enqueueSync({ action: "update", entity: "candidate", entityId: c.id, payload: { groupId: null } });
       }
     });
@@ -519,6 +615,12 @@ export function AppProvider({
 
   const lockGroup = useCallback((groupId: string, locked: boolean) => {
     dispatch({ type: "LOCK_GROUP", payload: { groupId, locked } });
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) db.groups.update(groupId, { isLocked: locked });
+    });
+
     enqueueSync({ action: "update", entity: "group", entityId: groupId, payload: { isLocked: locked } }).then(() => {
       flushSyncQueue();
     });
@@ -533,6 +635,12 @@ export function AppProvider({
   const addRoom = useCallback((room: Room) => {
     dispatch({ type: "ADD_ROOM", payload: room });
     addActivity(`Created room: ${room.name}`, "room", "created");
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) db.rooms.put(room);
+    });
+
     enqueueSync({ action: "create", entity: "room", entityId: room.id, payload: room }).then(() => {
       flushSyncQueue();
     });
@@ -540,6 +648,12 @@ export function AppProvider({
 
   const updateRoom = useCallback((room: Room) => {
     dispatch({ type: "UPDATE_ROOM", payload: room });
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) db.rooms.put(room);
+    });
+
     enqueueSync({ action: "update", entity: "room", entityId: room.id, payload: room }).then(() => {
       flushSyncQueue();
     });
@@ -553,6 +667,12 @@ export function AppProvider({
       if (room) addActivity(`Assigned ${candidate.fullName} to ${room.name}`, "room", "assigned");
       else addActivity(`Removed ${candidate.fullName} from room`, "room", "removed");
     }
+
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) db.candidates.update(candidateId, { roomId });
+    });
+
     enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { roomId } }).then(() => {
       flushSyncQueue();
     });
