@@ -327,6 +327,28 @@ export function AppProvider({
   }, []);
 
   const loadEventData = useCallback(async (eventId: string) => {
+    // 1. Try to load from IndexedDB (Dexie) first for immediate, offline-first display
+    try {
+      const { db } = await import("./dexie");
+      if (db) {
+        const [cands, grps, rms, conns] = await Promise.all([
+          db.candidates.where("eventId").equals(eventId).toArray(),
+          db.groups.where("eventId").equals(eventId).toArray(),
+          db.rooms.where("eventId").equals(eventId).toArray(),
+          db.connections.toArray(),
+        ]);
+        if (cands.length > 0 || grps.length > 0) {
+          dispatch({
+            type: "SET_APP_DATA",
+            payload: { candidates: cands, groups: grps, rooms: rms, connections: conns },
+          });
+        }
+      }
+    } catch {
+      // Ignore Dexie errors
+    }
+
+    // 2. Then, fetch from the server to ensure we have the latest data
     try {
       const [candidatesRes, groupsRes, roomsRes, connectionsRes] = await Promise.allSettled([
         fetch(`/api/candidates?eventId=${eventId}`).then((r) => r.json()),
@@ -334,23 +356,27 @@ export function AppProvider({
         fetch(`/api/rooms?eventId=${eventId}`).then((r) => r.json()),
         fetch(`/api/connections?eventId=${eventId}`).then((r) => r.json()),
       ]);
-      dispatch({
-        type: "SET_APP_DATA",
-        payload: {
-          candidates:  candidatesRes.status  === "fulfilled" ? (candidatesRes.value.data  ?? []) : [],
-          groups:      groupsRes.status      === "fulfilled" ? (groupsRes.value.data      ?? []) : [],
-          rooms:       roomsRes.status       === "fulfilled" ? (roomsRes.value.data       ?? []) : [],
-          connections: connectionsRes.status === "fulfilled"
-            ? (connectionsRes.value.data ?? []).map((c: Connection & { from?: { fullName: string }; to?: { fullName: string } }) => ({
-                ...c,
-                fromName: c.from?.fullName ?? c.fromName,
-                toName:   c.to?.fullName   ?? c.toName,
-              }))
-            : [],
-        },
-      });
+
+      const data = {
+        candidates:  candidatesRes.status  === "fulfilled" ? (candidatesRes.value.data  ?? []) : [],
+        groups:      groupsRes.status      === "fulfilled" ? (groupsRes.value.data      ?? []) : [],
+        rooms:       roomsRes.status       === "fulfilled" ? (roomsRes.value.data       ?? []) : [],
+        connections: connectionsRes.status === "fulfilled"
+          ? (connectionsRes.value.data ?? []).map((c: Connection & { from?: { fullName: string }; to?: { fullName: string } }) => ({
+              ...c,
+              fromName: c.from?.fullName ?? c.fromName,
+              toName:   c.to?.fullName   ?? c.toName,
+            }))
+          : [],
+      };
+
+      dispatch({ type: "SET_APP_DATA", payload: data });
+
+      // 3. Hydrate local DB with fresh data from server
+      const { hydrateFromServer } = await import("./dexie");
+      hydrateFromServer(data);
     } catch {
-      // Silently ignore network errors — app stays with current state
+      // Silently ignore network errors — app stays with Dexie data
     }
   }, []);
 

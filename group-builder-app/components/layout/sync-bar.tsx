@@ -8,17 +8,25 @@ export default function SyncBar() {
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
 
-  // Read real pending count from IndexedDB on mount
+  // Read real pending count from IndexedDB on mount and trigger flush
   useEffect(() => {
-    async function loadPending() {
+    async function loadPendingAndFlush() {
       try {
-        const { db } = await import("@/lib/dexie");
-        if (db) setPendingCount(await db.syncQueue.count());
+        const { db, flushSyncQueue } = await import("@/lib/dexie");
+        if (db) {
+          const count = await db.syncQueue.count();
+          setPendingCount(count);
+          if (count > 0 && navigator.onLine) {
+            setSyncing(true);
+            await flushSyncQueue((remaining) => setPendingCount(remaining));
+            setSyncing(false);
+          }
+        }
       } catch {
         // IndexedDB unavailable — ignore
       }
     }
-    loadPending();
+    loadPendingAndFlush();
   }, []);
 
   useEffect(() => {
@@ -29,6 +37,7 @@ export default function SyncBar() {
       setOnline(true);
       setSyncing(true);
       try {
+        const { flushSyncQueue } = await import("@/lib/dexie");
         await flushSyncQueue((remaining) => setPendingCount(remaining));
       } catch {
         // Network flush failed — will retry on next reconnect
