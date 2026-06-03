@@ -7,6 +7,7 @@ import SearchInput from "@/components/ui/search-input";
 import { Chip, GenderChip, AllergyBadge } from "@/components/ui/chip";
 import Modal from "@/components/ui/modal";
 import Initials from "@/components/ui/initials";
+import { formatConnectionLabel } from "@/lib/utils";
 import type { Candidate, Connection, Gender, RelationshipType } from "@/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -40,15 +41,6 @@ const FIXED_SORT_COLS = [
   { key: "group",       label: "Group" },
   { key: "room",        label: "Room" },
 ];
-
-// Returns a human-readable label for a connection, using the note for AUTO connections
-function connLabel(conn: { source: string; relationshipType: string; note?: string | null }): string {
-  if (conn.source === "AUTO" && conn.note) {
-    const m = conn.note.match(/^Shared inviter:\s*"(.+)"$/);
-    if (m) return `same inviter (${m[1]})`;
-  }
-  return conn.relationshipType.toLowerCase();
-}
 
 // ─── Import helpers ────────────────────────────────────────────────────────────
 
@@ -1375,7 +1367,7 @@ function CandidateModal({
                       )}
                     </div>
                     <div style={{ display: "flex", gap: 4, alignItems: "center", flexShrink: 0 }}>
-                      <Chip kind="default">{connLabel(conn)}</Chip>
+                      <Chip kind="default">{formatConnectionLabel(conn)}</Chip>
                       {isPending ? (
                         <>
                           <button

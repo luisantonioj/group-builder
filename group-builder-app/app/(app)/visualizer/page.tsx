@@ -7,16 +7,9 @@ import { Chip } from "@/components/ui/chip";
 import Initials from "@/components/ui/initials";
 import Modal from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { formatConnectionLabel } from "@/lib/utils";
 
 type Tab = "graph" | "clusters" | "table";
-
-function connLabel(conn: { source: string; relationshipType: string; note?: string | null }): string {
-  if (conn.source === "AUTO" && conn.note) {
-    const m = conn.note.match(/^Shared inviter:\s*"(.+)"$/);
-    if (m) return `same inviter (${m[1]})`;
-  }
-  return conn.relationshipType.toLowerCase();
-}
 
 export default function VisualizerPage() {
   const { candidates, connections, adjacency, allConflicts, addConnection } = useApp();
@@ -448,7 +441,7 @@ export default function VisualizerPage() {
                               kind="default"
                               style={{ fontSize: "0.65rem", padding: "1px 5px" }}
                             >
-                              {connLabel(conn)}
+                              {formatConnectionLabel(conn)}
                             </Chip>
                             {isPending ? (
                               <Chip kind="warning" style={{ fontSize: "0.65rem", padding: "1px 5px" }}>
@@ -564,7 +557,7 @@ export default function VisualizerPage() {
                                 kind="default"
                                 style={{ fontSize: "0.65rem", padding: "1px 5px" }}
                               >
-                                {connLabel(conn)}
+                                {formatConnectionLabel(conn)}
                               </Chip>
                               <Chip
                                 kind={conn.source === "AUTO" ? "accent" : "default"}
@@ -627,7 +620,7 @@ export default function VisualizerPage() {
                         kind="default"
                         style={{ textTransform: "capitalize" } as React.CSSProperties}
                       >
-                        {connLabel(conn)}
+                        {formatConnectionLabel(conn)}
                       </Chip>
                     </td>
                     <td>

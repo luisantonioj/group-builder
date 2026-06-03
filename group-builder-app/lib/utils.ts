@@ -39,3 +39,11 @@ export function formatRelativeTime(iso: string): string {
 export function pluralize(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
+
+export function formatConnectionLabel(conn: { source: string; relationshipType: string; note?: string | null }): string {
+  if (conn.source === "AUTO" && conn.note) {
+    const m = conn.note.match(/^Shared inviter:\s*"(.+)"$/);
+    if (m) return `same inviter (${m[1]})`;
+  }
+  return conn.relationshipType.toLowerCase();
+}

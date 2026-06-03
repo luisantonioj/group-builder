@@ -21,6 +21,7 @@ import { useToast } from "@/components/ui/toast";
 import { Chip, GenderChip } from "@/components/ui/chip";
 import Initials from "@/components/ui/initials";
 import Modal from "@/components/ui/modal";
+import { formatConnectionLabel } from "@/lib/utils";
 import type { Candidate, Room, Gender, RoomGender } from "@/types";
 
 type GenderTab = "MALE" | "FEMALE";
@@ -62,7 +63,7 @@ export default function RoomsPage() {
     const map = new Map<string, string>();
     for (const conn of connections) {
       const [a, b] = [conn.fromId, conn.toId].sort();
-      map.set(`${a}:${b}`, conn.relationshipType);
+      map.set(`${a}:${b}`, formatConnectionLabel(conn));
     }
     return map;
   }, [connections]);
@@ -411,10 +412,6 @@ interface RoomConflictItem {
   type: string;
 }
 
-function formatRelType(t: string) {
-  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
-}
-
 function RoomDropZone({ room, members, conflictItems, isOver, groups, onRemove }: {
   room: Room;
   members: Candidate[];
@@ -502,7 +499,7 @@ function RoomDropZone({ room, members, conflictItems, isOver, groups, onRemove }
               <span style={{ opacity: 0.65 }}>and</span>
               <span style={{ fontWeight: "var(--font-weight-semibold)" }}>{item.bName}</span>
               <span style={{ opacity: 0.5, margin: "0 1px" }}>●</span>
-              <span style={{ opacity: 0.75 }}>{formatRelType(item.type)}</span>
+              <span style={{ opacity: 0.75 }}>{item.type}</span>
             </div>
           ))}
         </div>

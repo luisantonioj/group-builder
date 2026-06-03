@@ -30,7 +30,9 @@ import SearchInput from "@/components/ui/search-input";
 import { Chip } from "@/components/ui/chip";
 import Initials from "@/components/ui/initials";
 import Modal from "@/components/ui/modal";
-import type { Candidate, Group } from "@/types";
+import { formatConnectionLabel } from "@/lib/utils";
+import type { Candidate, Group, Connection, Conflict } from "@/types";
+
 
 export default function GroupsPage() {
   const { candidates, connections, groups, adjacency, groupConflicts, assignToGroup, autoDistribute, clearAllGroups, addGroup, deleteGroup, updateGroup, lockGroup, reorderGroups, event } = useApp();
@@ -78,12 +80,12 @@ export default function GroupsPage() {
     return map;
   }, [groups, candidates]);
 
-  // Lookup: sorted "idA:idB" → relationship type
+  // Lookup: sorted "idA:idB" → relationship label
   const connectionByPair = useMemo(() => {
     const map = new Map<string, string>();
     for (const conn of connections) {
       const [a, b] = [conn.fromId, conn.toId].sort();
-      map.set(`${a}:${b}`, conn.relationshipType);
+      map.set(`${a}:${b}`, formatConnectionLabel(conn));
     }
     return map;
   }, [connections]);
@@ -612,10 +614,6 @@ interface ConflictItem {
   type: string;
 }
 
-function formatRelType(t: string) {
-  return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
-}
-
 function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onRemove, onLock, onRename }: {
   group: Group;
   members: Candidate[];
@@ -741,7 +739,7 @@ function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onRe
               <span style={{ opacity: 0.65 }}>and</span>
               <span style={{ fontWeight: "var(--font-weight-semibold)" }}>{item.bName}</span>
               <span style={{ opacity: 0.5, margin: "0 1px" }}>●</span>
-              <span style={{ opacity: 0.75 }}>{formatRelType(item.type)}</span>
+              <span style={{ opacity: 0.75 }}>{item.type}</span>
             </div>
           ))}
         </div>
