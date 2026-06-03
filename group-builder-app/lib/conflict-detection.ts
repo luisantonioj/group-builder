@@ -209,6 +209,15 @@ export function deriveCoInviteeConnections(candidates: Candidate[]): Connection[
   return result;
 }
 
+// Helper: Shuffle an array in-place (Fisher-Yates)
+function shuffle<T>(array: T[]): T[] {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
 // Auto-distribute candidates into groups, minimising conflicts
 export function autoDistribute(
   candidates: Candidate[],
@@ -219,10 +228,13 @@ export function autoDistribute(
   const assignments = new Map<string, string>();
 
   // Sort candidates by connection degree descending (high-conflict first)
-  const sorted = [...candidates].sort(
-    (a, b) =>
-      (adjacency.get(b.id)?.size ?? 0) - (adjacency.get(a.id)?.size ?? 0)
-  );
+  // For candidates with the same degree, randomize their order.
+  const sorted = [...candidates].sort((a, b) => {
+    const degreeA = adjacency.get(a.id)?.size ?? 0;
+    const degreeB = adjacency.get(b.id)?.size ?? 0;
+    if (degreeA !== degreeB) return degreeB - degreeA;
+    return Math.random() - 0.5; // Randomise ties
+  });
 
   // Track current member sets for conflict checking
   const groupMembers = new Map<string, Set<string>>(
@@ -234,7 +246,10 @@ export function autoDistribute(
     let bestGroupId: string | null = null;
     let bestScore = Infinity;
 
-    for (const group of groups) {
+    // Shuffle groups to randomize tie-breaking when scores are identical
+    const shuffledGroups = shuffle([...groups]);
+
+    for (const group of shuffledGroups) {
       const members = groupMembers.get(group.id)!;
       if (members.size >= group.capacity) continue;
 
@@ -244,7 +259,7 @@ export function autoDistribute(
         if (areConnected(candidate.id, memberId, adjacency)) conflictCount++;
       }
 
-      // Prefer gender balance (soft)
+      // Preference score: conflicts are primary (weight 100), size is secondary.
       const score = conflictCount * 100 + members.size;
       if (score < bestScore) {
         bestScore = score;
