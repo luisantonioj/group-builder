@@ -40,7 +40,7 @@ export default function RoomsPage() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 15 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -357,6 +357,7 @@ function RoomDraggableCard({ candidate: c, groups }: { candidate: Candidate; gro
         cursor: isDragging ? "grabbing" : "grab",
         opacity: isDragging ? 0.35 : 1,
         transition: "opacity 0.15s",
+        touchAction: "none",
       }}
     >
       <Initials name={c.fullName} gender={c.gender} size={26} fontSize={10} />
@@ -395,6 +396,7 @@ function RoomDraggableMember({ candidate: m, isConflict, onRemove, groups }: {
         cursor: isDragging ? "grabbing" : "grab",
         opacity: isDragging ? 0.35 : 1,
         transition: "opacity 0.15s",
+        touchAction: "none",
       }}
     >
       <Initials name={m.fullName} gender={m.gender} size={22} fontSize={9} />

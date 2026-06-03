@@ -54,7 +54,7 @@ export default function GroupsPage() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 15 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   const modalSensors = useSensors(
@@ -516,6 +516,7 @@ function DraggableCard({ candidate: c, adjacency }: { candidate: Candidate; adja
         cursor: isDragging ? "grabbing" : "grab",
         opacity: isDragging ? 0.35 : 1,
         transition: "opacity 0.15s",
+        touchAction: "none",
       }}
     >
       <Initials name={c.fullName} gender={c.gender} size={26} fontSize={10} />
@@ -554,6 +555,7 @@ function DraggableMember({ candidate: m, isConflict, isLocked, onRemove }: {
         cursor: isDragging ? "grabbing" : "grab",
         opacity: isDragging ? 0.35 : 1,
         transition: "opacity 0.15s",
+        touchAction: "none",
       }}
     >
       <Initials name={m.fullName} gender={m.gender} size={22} fontSize={9} />
@@ -603,8 +605,7 @@ function SortableNameInput({ id, value, index, onChange }: {
         {...listeners}
         {...attributes}
         type="button"
-        title="Drag to reorder"
-        style={{ background: "none", border: "none", cursor: "grab", color: "var(--text-muted)", padding: "4px", display: "flex", alignItems: "center", flexShrink: 0 }}
+        style={{ background: "none", border: "none", cursor: "grab", color: "var(--text-muted)", padding: "2px 4px", display: "flex", alignItems: "center", flexShrink: 0, touchAction: "none" }}
       >
         <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
           <circle cx="3" cy="2" r="1.2"/><circle cx="9" cy="2" r="1.2"/>
@@ -683,7 +684,7 @@ function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onRe
             {...attributes}
             type="button"
             title="Drag to reorder"
-            style={{ background: "none", border: "none", cursor: "grab", color: "var(--text-muted)", padding: "2px 4px", display: "flex", alignItems: "center", flexShrink: 0 }}
+            style={{ background: "none", border: "none", cursor: "grab", color: "var(--text-muted)", padding: "2px 4px", display: "flex", alignItems: "center", flexShrink: 0, touchAction: "none" }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
