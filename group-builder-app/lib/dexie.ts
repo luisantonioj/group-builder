@@ -58,41 +58,48 @@ export async function enqueueSync(
   await db.syncQueue.add({ ...item, timestamp: Date.now(), retries: 0 });
 }
 
+let isFlushing = false;
+
 // Flush the sync queue to the server when online
 export async function flushSyncQueue(onProgress?: (pending: number) => void) {
-  if (!db || !navigator.onLine) return;
+  if (!db || !navigator.onLine || isFlushing) return;
 
-  const queue = await db.syncQueue.orderBy("timestamp").toArray();
-  onProgress?.(queue.length);
+  isFlushing = true;
+  try {
+    const queue = await db.syncQueue.orderBy("timestamp").toArray();
+    onProgress?.(queue.length);
 
-  for (const item of queue) {
-    try {
-      const method = item.action === "delete" ? "DELETE" : item.action === "create" ? "POST" : "PUT";
-      const url = `/api/${item.entity}s/${item.action !== "create" ? item.entityId : ""}`;
+    for (const item of queue) {
+      try {
+        const method = item.action === "delete" ? "DELETE" : item.action === "create" ? "POST" : "PUT";
+        const url = `/api/${item.entity}s/${item.action !== "create" ? item.entityId : ""}`;
 
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: item.action !== "delete" ? JSON.stringify(item.payload) : undefined,
-      });
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: item.action !== "delete" ? JSON.stringify(item.payload) : undefined,
+        });
 
-      if (res.ok && item.id != null) {
-        await db.syncQueue.delete(item.id);
-      } else if (!res.ok) {
-        // Increment retry count; give up after 3
-        if (item.retries >= 3 && item.id != null) {
+        if (res.ok && item.id != null) {
           await db.syncQueue.delete(item.id);
-        } else if (item.id != null) {
-          await db.syncQueue.update(item.id, { retries: item.retries + 1 });
+        } else if (!res.ok) {
+          // Increment retry count; give up after 3
+          if (item.retries >= 3 && item.id != null) {
+            await db.syncQueue.delete(item.id);
+          } else if (item.id != null) {
+            await db.syncQueue.update(item.id, { retries: item.retries + 1 });
+          }
         }
+      } catch {
+        // Network failure — will retry on next flush
       }
-    } catch {
-      // Network failure — will retry on next flush
     }
-  }
 
-  const remaining = await db.syncQueue.count();
-  onProgress?.(remaining);
+    const remaining = await db.syncQueue.count();
+    onProgress?.(remaining);
+  } finally {
+    isFlushing = false;
+  }
 }
 
 // Seed local DB from server response

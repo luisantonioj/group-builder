@@ -21,7 +21,7 @@ import {
   deriveAutoConnections,
 } from "./conflict-detection";
 import type { Candidate, Connection, Group, Room, Activity, Event, Conflict } from "@/types";
-import { enqueueSync } from "./dexie";
+import { enqueueSync, flushSyncQueue } from "./dexie";
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -353,58 +353,82 @@ export function AppProvider({
   const addCandidate = useCallback((candidate: Candidate) => {
     dispatch({ type: "ADD_CANDIDATE", payload: candidate });
     addActivity(`Added candidate: ${candidate.fullName}`, "candidate", "created");
-    if (!navigator.onLine) {
-      enqueueSync({ action: "create", entity: "candidate", entityId: candidate.id, payload: candidate });
-    }
+    enqueueSync({ action: "create", entity: "candidate", entityId: candidate.id, payload: candidate }).then(() => {
+      flushSyncQueue();
+    });
   }, [addActivity]);
 
   const updateCandidate = useCallback((candidate: Candidate) => {
     dispatch({ type: "UPDATE_CANDIDATE", payload: candidate });
-    if (!navigator.onLine) {
-      enqueueSync({ action: "update", entity: "candidate", entityId: candidate.id, payload: candidate });
-    }
+    enqueueSync({ action: "update", entity: "candidate", entityId: candidate.id, payload: candidate }).then(() => {
+      flushSyncQueue();
+    });
   }, []);
 
   const deleteCandidate = useCallback((id: string) => {
     dispatch({ type: "DELETE_CANDIDATE", payload: id });
-    if (!navigator.onLine) {
-      enqueueSync({ action: "delete", entity: "candidate", entityId: id, payload: {} });
-    }
+    enqueueSync({ action: "delete", entity: "candidate", entityId: id, payload: {} }).then(() => {
+      flushSyncQueue();
+    });
   }, []);
 
   const deleteCandidates = useCallback((ids: string[]) => {
     dispatch({ type: "DELETE_CANDIDATES", payload: ids });
-    // For now, offline sync for batch delete is complex, we might skip it or do it individually
+    // Batch delete is handled individually in sync queue for simplicity
+    Promise.all(ids.map(id => enqueueSync({ action: "delete", entity: "candidate", entityId: id, payload: {} }))).then(() => {
+      flushSyncQueue();
+    });
   }, []);
 
   const importCandidates = useCallback((candidates: Candidate[]) => {
     dispatch({ type: "SET_CANDIDATES", payload: [...candidates, ...state.candidates] });
     addActivity(`Imported ${candidates.length} candidates`, "candidate", "imported");
+    // API call for import is usually handled by the page directly for better progress tracking,
+    // but we ensure store is consistent.
   }, [state.candidates, addActivity]);
 
   const addConnection = useCallback((conn: Connection) => {
     dispatch({ type: "ADD_CONNECTION", payload: conn });
     addActivity(`Added connection: ${conn.fromName} ↔ ${conn.toName}`, "connection", "created");
+    enqueueSync({ action: "create", entity: "connection", entityId: conn.id, payload: conn }).then(() => {
+      flushSyncQueue();
+    });
   }, [addActivity]);
 
   const confirmConnection = useCallback((id: string) => {
     dispatch({ type: "CONFIRM_CONNECTION", payload: id });
+    enqueueSync({ action: "update", entity: "connection", entityId: id, payload: { confirmed: true } }).then(() => {
+      flushSyncQueue();
+    });
   }, []);
 
   const deleteConnection = useCallback((id: string) => {
     dispatch({ type: "DELETE_CONNECTION", payload: id });
+    enqueueSync({ action: "delete", entity: "connection", entityId: id, payload: {} }).then(() => {
+      flushSyncQueue();
+    });
   }, []);
 
   const addGroup = useCallback((group: Group) => {
     dispatch({ type: "ADD_GROUP", payload: group });
-  }, []);
+    addActivity(`Created group: ${group.name}`, "group", "created");
+    enqueueSync({ action: "create", entity: "group", entityId: group.id, payload: group }).then(() => {
+      flushSyncQueue();
+    });
+  }, [addActivity]);
 
   const updateGroup = useCallback((group: Group) => {
     dispatch({ type: "UPDATE_GROUP", payload: group });
+    enqueueSync({ action: "update", entity: "group", entityId: group.id, payload: group }).then(() => {
+      flushSyncQueue();
+    });
   }, []);
 
   const deleteGroup = useCallback((id: string) => {
     dispatch({ type: "DELETE_GROUP", payload: id });
+    enqueueSync({ action: "delete", entity: "group", entityId: id, payload: {} }).then(() => {
+      flushSyncQueue();
+    });
   }, []);
 
   const assignToGroup = useCallback((candidateId: string, groupId: string | null) => {
@@ -415,9 +439,9 @@ export function AppProvider({
       if (group) addActivity(`Assigned ${candidate.fullName} to ${group.name}`, "group", "assigned");
       else addActivity(`Removed ${candidate.fullName} from group`, "group", "removed");
     }
-    if (!navigator.onLine) {
-      enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } });
-    }
+    enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } }).then(() => {
+      flushSyncQueue();
+    });
   }, [state.candidates, state.groups, addActivity]);
 
   const autoDistribute = useCallback(() => {
@@ -430,30 +454,48 @@ export function AppProvider({
     const assignments = autoDistributeImpl(unassigned, groupsForDist, adjacency);
     assignments.forEach((groupId, candidateId) => {
       dispatch({ type: "ASSIGN_TO_GROUP", payload: { candidateId, groupId } });
+      enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } });
     });
+    flushSyncQueue();
     addActivity(`Auto-distributed ${assignments.size} candidates`, "group", "assigned");
   }, [state.candidates, state.groups, adjacency, addActivity]);
 
   const clearAllGroups = useCallback(() => {
     state.candidates.forEach((c) => {
-      if (c.groupId) dispatch({ type: "ASSIGN_TO_GROUP", payload: { candidateId: c.id, groupId: null } });
+      if (c.groupId) {
+        dispatch({ type: "ASSIGN_TO_GROUP", payload: { candidateId: c.id, groupId: null } });
+        enqueueSync({ action: "update", entity: "candidate", entityId: c.id, payload: { groupId: null } });
+      }
     });
+    flushSyncQueue();
   }, [state.candidates]);
 
   const lockGroup = useCallback((groupId: string, locked: boolean) => {
     dispatch({ type: "LOCK_GROUP", payload: { groupId, locked } });
+    enqueueSync({ action: "update", entity: "group", entityId: groupId, payload: { isLocked: locked } }).then(() => {
+      flushSyncQueue();
+    });
   }, []);
 
   const reorderGroups = useCallback((groupIds: string[]) => {
     dispatch({ type: "REORDER_GROUPS", payload: groupIds });
+    // Reordering currently doesn't have a specific API field on the Group entity itself,
+    // usually handled by 'index' or 'order' field if present.
   }, []);
 
   const addRoom = useCallback((room: Room) => {
     dispatch({ type: "ADD_ROOM", payload: room });
-  }, []);
+    addActivity(`Created room: ${room.name}`, "room", "created");
+    enqueueSync({ action: "create", entity: "room", entityId: room.id, payload: room }).then(() => {
+      flushSyncQueue();
+    });
+  }, [addActivity]);
 
   const updateRoom = useCallback((room: Room) => {
     dispatch({ type: "UPDATE_ROOM", payload: room });
+    enqueueSync({ action: "update", entity: "room", entityId: room.id, payload: room }).then(() => {
+      flushSyncQueue();
+    });
   }, []);
 
   const assignToRoom = useCallback((candidateId: string, roomId: string | null) => {
@@ -464,9 +506,9 @@ export function AppProvider({
       if (room) addActivity(`Assigned ${candidate.fullName} to ${room.name}`, "room", "assigned");
       else addActivity(`Removed ${candidate.fullName} from room`, "room", "removed");
     }
-    if (!navigator.onLine) {
-      enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { roomId } });
-    }
+    enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { roomId } }).then(() => {
+      flushSyncQueue();
+    });
   }, [state.candidates, state.rooms, addActivity]);
 
   const value: AppContextValue = {
