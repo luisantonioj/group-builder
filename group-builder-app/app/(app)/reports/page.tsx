@@ -51,7 +51,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Status bar */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--space-lg)", marginBottom: "var(--space-xl)" }}>
+      <div className="stat-grid">
         <div className="stat-tile">
           <div className="stat-value" style={{ color: "var(--color-primary)" }}>{totalCandidates}</div>
           <div className="stat-label">Total Candidates</div>

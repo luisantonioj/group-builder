@@ -43,7 +43,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat tiles */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "var(--space-lg)", marginBottom: "var(--space-xl)" }}>
+      <div className="stat-grid">
         <StatTile label="Total Candidates" value={stats.total} color="var(--color-primary)" />
         <StatTile
           label="Groups Formed"
@@ -66,7 +66,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Main content grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-xl)", marginBottom: "var(--space-xl)" }}>
+      <div className="dashboard-grid">
         {/* Batch composition */}
         <div className="card">
           <div className="card-head">

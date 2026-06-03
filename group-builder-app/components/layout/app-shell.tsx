@@ -9,7 +9,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Keep --current-sidebar-width in sync with state and viewport
   useEffect(() => {
     function update() {
-      const isMobile = window.innerWidth < 768;
+      const isMobile = window.innerWidth < 1024;
       document.documentElement.style.setProperty(
         "--current-sidebar-width",
         isMobile ? "0px" : collapsed ? "64px" : "var(--sidebar-width)"

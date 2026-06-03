@@ -11,6 +11,7 @@ import {
   useSensor,
   useSensors,
   PointerSensor,
+  TouchSensor,
   KeyboardSensor,
   useDraggable,
   useDroppable,
@@ -30,7 +31,7 @@ import SearchInput from "@/components/ui/search-input";
 import { Chip } from "@/components/ui/chip";
 import Initials from "@/components/ui/initials";
 import Modal from "@/components/ui/modal";
-import { formatConnectionLabel } from "@/lib/utils";
+import { cn, formatConnectionLabel } from "@/lib/utils";
 import type { Candidate, Group, Connection, Conflict } from "@/types";
 
 
@@ -46,12 +47,14 @@ export default function GroupsPage() {
   const [keepExisting, setKeepExisting] = useState<boolean | null>(null);
   const [activeDragIsGroup, setActiveDragIsGroup] = useState(false);
   const [groupCountInput, setGroupCountInput] = useState("4");
+  const [poolCollapsed, setPoolCollapsed] = useState(false);
   const [nameEntries, setNameEntries] = useState<{ id: string; name: string }[]>(
     () => Array.from({ length: 4 }, (_, i) => ({ id: `ne-init-${i}`, name: "" }))
   );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
   const modalSensors = useSensors(
@@ -275,39 +278,56 @@ export default function GroupsPage() {
           </div>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: "var(--space-xl)", alignItems: "start" }}>
+        <div className="groups-layout">
           {/* Left: Candidate Pool */}
-          <div className="card" style={{ position: "sticky", top: "calc(var(--topbar-height) + var(--space-lg))" }}>
-            <div className="card-head">
-              <div>
-                <div style={{ fontWeight: "var(--font-weight-semibold)" }}>Candidate Pool</div>
-                <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{unassigned.length} unassigned</div>
-              </div>
-            </div>
-            <div style={{ padding: "var(--space-md)" }}>
-              <SearchInput value={search} onChange={setSearch} placeholder="Search…" />
-              <div style={{ display: "flex", gap: 2, marginTop: "var(--space-sm)" }}>
-                {(["ALL", "MALE", "FEMALE"] as const).map((v) => (
-                  <button key={v} onClick={() => setGenderFilter(v)} className={`btn btn-sm ${genderFilter === v ? "btn-primary" : "btn-ghost"}`} style={{ flex: 1 }}>
-                    {v === "ALL" ? "All" : v === "MALE" ? "♂" : "♀"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <PoolDropZone id="pool" style={{ maxHeight: "60vh", overflowY: "auto", padding: "0 var(--space-md) var(--space-md)" }}>
-              {unassigned.map((c) => (
-                <DraggableCard key={c.id} candidate={c} adjacency={adjacency} />
-              ))}
-              {unassigned.length === 0 && (
-                <div style={{ textAlign: "center", padding: "var(--space-xl) 0", color: "var(--text-muted)", fontSize: "var(--font-size-sm)" }}>
-                  {candidates.filter((c) => !c.groupId).length === 0 ? "All candidates assigned! 🎉" : "No candidates match filter."}
+          <div className={cn("pool-sidebar", poolCollapsed && "collapsed")}>
+            <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+              <div className="card-head" style={{ padding: "var(--space-md) var(--space-lg)" }}>
+                <div>
+                  <div style={{ fontWeight: "var(--font-weight-semibold)", fontSize: "var(--font-size-sm)" }}>Candidate Pool</div>
+                  <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{unassigned.length} unassigned</div>
                 </div>
+                <button 
+                  className="pool-toggle-btn"
+                  onClick={() => setPoolCollapsed(!poolCollapsed)}
+                  title={poolCollapsed ? "Expand pool" : "Collapse pool"}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    {poolCollapsed ? <polyline points="13 17 18 12 13 7" /> : <polyline points="11 17 6 12 11 7" />}
+                    {poolCollapsed ? <polyline points="6 17 11 12 6 7" /> : <polyline points="18 17 13 12 18 7" />}
+                  </svg>
+                </button>
+              </div>
+              
+              {!poolCollapsed && (
+                <>
+                  <div style={{ padding: "var(--space-md)" }}>
+                    <SearchInput value={search} onChange={setSearch} placeholder="Search…" />
+                    <div style={{ display: "flex", gap: 2, marginTop: "var(--space-sm)" }}>
+                      {(["ALL", "MALE", "FEMALE"] as const).map((v) => (
+                        <button key={v} onClick={() => setGenderFilter(v)} className={`btn btn-sm ${genderFilter === v ? "btn-primary" : "btn-ghost"}`} style={{ flex: 1 }}>
+                          {v === "ALL" ? "All" : v === "MALE" ? "♂" : "♀"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <PoolDropZone id="pool" style={{ flex: 1, overflowY: "auto", padding: "0 var(--space-md) var(--space-md)" }}>
+                    {unassigned.map((c) => (
+                      <DraggableCard key={c.id} candidate={c} adjacency={adjacency} />
+                    ))}
+                    {unassigned.length === 0 && (
+                      <div style={{ textAlign: "center", padding: "var(--space-xl) 0", color: "var(--text-muted)", fontSize: "var(--font-size-sm)" }}>
+                        {candidates.filter((c) => !c.groupId).length === 0 ? "All assigned! 🎉" : "No matches."}
+                      </div>
+                    )}
+                  </PoolDropZone>
+                </>
               )}
-            </PoolDropZone>
+            </div>
           </div>
 
           {/* Right: Group Cards */}
-          <div>
+          <div className="groups-grid-container">
             {groups.length === 0 ? (
               <div className="card" style={{ padding: "var(--space-2xl)", textAlign: "center" }}>
                 <div style={{ color: "var(--text-muted)", marginBottom: "var(--space-lg)" }}>No groups set up yet.</div>

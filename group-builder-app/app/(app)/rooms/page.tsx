@@ -11,6 +11,7 @@ import {
   useSensor,
   useSensors,
   PointerSensor,
+  TouchSensor,
   KeyboardSensor,
   useDroppable,
   useDraggable,
@@ -21,7 +22,7 @@ import { useToast } from "@/components/ui/toast";
 import { Chip, GenderChip } from "@/components/ui/chip";
 import Initials from "@/components/ui/initials";
 import Modal from "@/components/ui/modal";
-import { formatConnectionLabel } from "@/lib/utils";
+import { cn, formatConnectionLabel } from "@/lib/utils";
 import type { Candidate, Room, Gender, RoomGender } from "@/types";
 
 type GenderTab = "MALE" | "FEMALE";
@@ -34,10 +35,12 @@ export default function RoomsPage() {
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [overRoomId, setOverRoomId] = useState<string | null>(null);
   const [addRoomOpen, setAddRoomOpen] = useState(false);
+  const [poolCollapsed, setPoolCollapsed] = useState(false);
   const [newRoom, setNewRoom] = useState({ name: "", floor: "", capacity: 8, bedCount: 8, gender: "MALE" as RoomGender });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -172,7 +175,7 @@ export default function RoomsPage() {
         </div>
 
         {/* Status bar */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "var(--space-lg)", marginBottom: "var(--space-xl)" }}>
+        <div className="stat-grid">
           <div className="stat-tile">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "var(--space-sm)" }}>
               <span style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)" }}>Capacity Used</span>
@@ -201,25 +204,40 @@ export default function RoomsPage() {
           ))}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", gap: "var(--space-xl)", alignItems: "start" }}>
+        <div className="groups-layout">
           {/* Candidate Pool */}
-          <div className="card" style={{ position: "sticky", top: "calc(var(--topbar-height) + var(--space-lg))" }}>
-            <div className="card-head">
-              <div>
-                <div style={{ fontWeight: "var(--font-weight-semibold)" }}>{genderTab === "MALE" ? "♂ Male" : "♀ Female"} Pool</div>
-                <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{unassigned.length} unassigned</div>
-              </div>
-            </div>
-            <PoolDropZone id="room-pool" style={{ padding: "var(--space-sm)", maxHeight: "60vh", overflowY: "auto" }}>
-              {unassigned.map((c) => (
-                <RoomDraggableCard key={c.id} candidate={c} groups={groups} />
-              ))}
-              {unassigned.length === 0 && (
-                <div style={{ textAlign: "center", padding: "var(--space-xl) 0", color: "var(--text-muted)", fontSize: "var(--font-size-sm)" }}>
-                  All {genderTab.toLowerCase()} candidates assigned 🎉
+          <div className={cn("pool-sidebar", poolCollapsed && "collapsed")}>
+            <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+              <div className="card-head" style={{ padding: "var(--space-md) var(--space-lg)" }}>
+                <div>
+                  <div style={{ fontWeight: "var(--font-weight-semibold)", fontSize: "var(--font-size-sm)" }}>{genderTab === "MALE" ? "♂ Male" : "♀ Female"} Pool</div>
+                  <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{unassigned.length} unassigned</div>
                 </div>
+                <button 
+                  className="pool-toggle-btn"
+                  onClick={() => setPoolCollapsed(!poolCollapsed)}
+                  title={poolCollapsed ? "Expand pool" : "Collapse pool"}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    {poolCollapsed ? <polyline points="13 17 18 12 13 7" /> : <polyline points="11 17 6 12 11 7" />}
+                    {poolCollapsed ? <polyline points="6 17 11 12 6 7" /> : <polyline points="18 17 13 12 18 7" />}
+                  </svg>
+                </button>
+              </div>
+
+              {!poolCollapsed && (
+                <PoolDropZone id="room-pool" style={{ flex: 1, padding: "var(--space-sm)", overflowY: "auto" }}>
+                  {unassigned.map((c) => (
+                    <RoomDraggableCard key={c.id} candidate={c} groups={groups} />
+                  ))}
+                  {unassigned.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "var(--space-xl) 0", color: "var(--text-muted)", fontSize: "var(--font-size-sm)" }}>
+                      All assigned 🎉
+                    </div>
+                  )}
+                </PoolDropZone>
               )}
-            </PoolDropZone>
+            </div>
           </div>
 
           {/* Room Cards */}

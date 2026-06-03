@@ -20,9 +20,6 @@ export function SidebarStateProvider({ children }: { children: React.ReactNode }
     const saved = localStorage.getItem("sidebar-collapsed");
     if (saved !== null) {
       setCollapsed(saved === "true");
-    } else {
-      // Auto-collapse on tablet (768–1023px)
-      setCollapsed(window.innerWidth >= 768 && window.innerWidth < 1024);
     }
   }, []);
 
