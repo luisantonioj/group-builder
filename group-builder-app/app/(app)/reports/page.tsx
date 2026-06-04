@@ -1,15 +1,25 @@
 "use client";
 
 import { useState } from "react";
+import * as XLSX from "xlsx";
 import { useApp } from "@/lib/store";
 import { Chip, GenderChip, AllergyBadge } from "@/components/ui/chip";
 import Initials from "@/components/ui/initials";
+import Modal from "@/components/ui/modal";
 
 type ReportTab = "groups" | "rooms" | "conflicts" | "allergies" | "contacts";
 
 export default function ReportsPage() {
   const { candidates, groups, rooms, allConflicts, connections, event: batch } = useApp();
   const [tab, setTab] = useState<ReportTab>("groups");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportOptions, setExportOptions] = useState({
+    groups: true,
+    rooms: true,
+    conflicts: true,
+    allergies: true,
+    contacts: true,
+  });
 
   const totalCandidates = candidates.length;
   const avgGroupSize = groups.length > 0
@@ -19,7 +29,112 @@ export default function ReportsPage() {
   const openConflicts = allConflicts.filter((c) => c.status === "ACTIVE").length;
 
   function handleExcelExport() {
-    alert("Excel export will be available once connected to the backend API. See SETUP_GUIDE.md for setup instructions.");
+    setExportOpen(true);
+  }
+
+  function performExport() {
+    const wb = XLSX.utils.book_new();
+
+    if (exportOptions.groups) {
+      const groupData: any[] = [];
+      groups.forEach((g) => {
+        const members = candidates.filter((c) => c.groupId === g.id);
+        if (members.length === 0) {
+          groupData.push({ Group: g.name, Name: "—", Gender: "—", Age: "—", Room: "—", Notes: "—" });
+        } else {
+          members.forEach((m) => {
+            const room = rooms.find((r) => r.id === m.roomId);
+            groupData.push({
+              Group: g.name,
+              Name: m.fullName,
+              Gender: m.gender,
+              Age: m.age ?? "—",
+              Room: room?.name ?? "—",
+              Notes: m.allergies ?? "—"
+            });
+          });
+        }
+      });
+      const ws = XLSX.utils.json_to_sheet(groupData);
+      XLSX.utils.book_append_sheet(wb, ws, "Groups");
+    }
+
+    if (exportOptions.rooms) {
+      const roomData: any[] = [];
+      rooms.forEach((r) => {
+        const members = candidates.filter((c) => c.roomId === r.id);
+        if (members.length === 0) {
+          roomData.push({ Room: r.name, Floor: r.floor ?? "—", Gender: r.gender, Name: "—", Age: "—", Group: "—" });
+        } else {
+          members.forEach((m) => {
+            const group = groups.find((g) => g.id === m.groupId);
+            roomData.push({
+              Room: r.name,
+              Floor: r.floor ?? "—",
+              Gender: r.gender,
+              Name: m.fullName,
+              Age: m.age ?? "—",
+              Group: group?.name ?? "—"
+            });
+          });
+        }
+      });
+      const ws = XLSX.utils.json_to_sheet(roomData);
+      XLSX.utils.book_append_sheet(wb, ws, "Rooms");
+    }
+
+    if (exportOptions.conflicts) {
+      const conflictData = allConflicts.map((c) => {
+        const location = c.groupId
+          ? groups.find((g) => g.id === c.groupId)?.name
+          : rooms.find((r) => r.id === c.roomId)?.name;
+        const conn = connections.find(
+          (conn) =>
+            (conn.fromId === c.candidateAId && conn.toId === c.candidateBId) ||
+            (conn.fromId === c.candidateBId && conn.toId === c.candidateAId)
+        );
+        return {
+          Location: location ?? "—",
+          Type: c.groupId ? "Group" : "Room",
+          CandidateA: c.candidateAName ?? c.candidateAId,
+          CandidateB: c.candidateBName ?? c.candidateBId,
+          Relationship: conn ? conn.relationshipType : "—",
+          Status: c.status,
+          Note: c.shepherdNote ?? "—"
+        };
+      });
+      const ws = XLSX.utils.json_to_sheet(conflictData);
+      XLSX.utils.book_append_sheet(wb, ws, "Conflicts");
+    }
+
+    if (exportOptions.allergies) {
+      const allergyData = candidates.filter(c => c.allergies).map(c => ({
+        Name: c.fullName,
+        Gender: c.gender,
+        Age: c.age ?? "—",
+        Group: groups.find((g) => g.id === c.groupId)?.name ?? "—",
+        Room: rooms.find((r) => r.id === c.roomId)?.name ?? "—",
+        Allergies: c.allergies
+      }));
+      const ws = XLSX.utils.json_to_sheet(allergyData);
+      XLSX.utils.book_append_sheet(wb, ws, "Allergies");
+    }
+
+    if (exportOptions.contacts) {
+      const contactData = candidates.map(c => ({
+        Name: c.fullName,
+        Group: groups.find((g) => g.id === c.groupId)?.name ?? "—",
+        "Father Name": c.fatherName ?? "—",
+        "Father Contact": c.fatherContact ?? "—",
+        "Mother Name": c.motherName ?? "—",
+        "Mother Contact": c.motherContact ?? "—"
+      }));
+      const ws = XLSX.utils.json_to_sheet(contactData);
+      XLSX.utils.book_append_sheet(wb, ws, "Emergency Contacts");
+    }
+
+    XLSX.writeFile(wb, `${batch.name || "Event"}_Reports.xlsx`);
+    setExportOpen(false);
   }
 
   function handlePrintPDF() {
@@ -296,6 +411,45 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
+
+      <Modal open={exportOpen} title="Export to Excel" onClose={() => setExportOpen(false)}
+        footer={
+          <div style={{ display: "flex", gap: "var(--space-sm)", justifyContent: "flex-end" }}>
+            <button className="btn btn-secondary" onClick={() => setExportOpen(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={performExport} disabled={!Object.values(exportOptions).some(Boolean)}>
+              Export
+            </button>
+          </div>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-secondary)", margin: 0 }}>
+            Select the reports you want to include in the Excel file. Each report will be on a separate sheet.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
+              <input type="checkbox" checked={exportOptions.groups} onChange={(e) => setExportOptions((prev) => ({ ...prev, groups: e.target.checked }))} />
+              <span className="form-label" style={{ margin: 0 }}>Groups</span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
+              <input type="checkbox" checked={exportOptions.rooms} onChange={(e) => setExportOptions((prev) => ({ ...prev, rooms: e.target.checked }))} />
+              <span className="form-label" style={{ margin: 0 }}>Rooms</span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
+              <input type="checkbox" checked={exportOptions.conflicts} onChange={(e) => setExportOptions((prev) => ({ ...prev, conflicts: e.target.checked }))} />
+              <span className="form-label" style={{ margin: 0 }}>Conflicts</span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
+              <input type="checkbox" checked={exportOptions.allergies} onChange={(e) => setExportOptions((prev) => ({ ...prev, allergies: e.target.checked }))} />
+              <span className="form-label" style={{ margin: 0 }}>Allergies & Care</span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
+              <input type="checkbox" checked={exportOptions.contacts} onChange={(e) => setExportOptions((prev) => ({ ...prev, contacts: e.target.checked }))} />
+              <span className="form-label" style={{ margin: 0 }}>Emergency Contacts</span>
+            </label>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
