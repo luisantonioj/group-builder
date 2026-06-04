@@ -28,13 +28,15 @@ import type { Candidate, Room, Gender, RoomGender } from "@/types";
 type GenderTab = "MALE" | "FEMALE";
 
 export default function RoomsPage() {
-  const { candidates, connections, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom, event } = useApp();
+  const { candidates, connections, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom, updateRoom, deleteRoom, event } = useApp();
   const { showToast } = useToast();
 
   const [genderTab, setGenderTab] = useState<GenderTab>("MALE");
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [overRoomId, setOverRoomId] = useState<string | null>(null);
   const [addRoomOpen, setAddRoomOpen] = useState(false);
+  const [editRoomOpen, setEditRoomOpen] = useState(false);
+  const [editRoomData, setEditRoomData] = useState<Room | null>(null);
   const [poolCollapsed, setPoolCollapsed] = useState(false);
   const [newRoom, setNewRoom] = useState({ name: "", floor: "", capacity: 8, bedCount: 8, gender: "MALE" as RoomGender });
 
@@ -160,6 +162,27 @@ export default function RoomsPage() {
     showToast("Room added", "success");
   }
 
+  function handleEditRoom() {
+    if (!editRoomData) return;
+    updateRoom({
+      ...editRoomData,
+      updatedAt: new Date().toISOString(),
+    });
+    setEditRoomOpen(false);
+    setEditRoomData(null);
+    showToast("Room updated", "success");
+  }
+
+  function handleDeleteRoom() {
+    if (!editRoomData) return;
+    if (confirm(`Are you sure you want to delete ${editRoomData.name}?`)) {
+      deleteRoom(editRoomData.id);
+      setEditRoomOpen(false);
+      setEditRoomData(null);
+      showToast("Room deleted", "success");
+    }
+  }
+
   return (
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
       <div>
@@ -254,6 +277,10 @@ export default function RoomsPage() {
                   isOver={overRoomId === room.id}
                   groups={groups}
                   onRemove={(cid) => assignToRoom(cid, null)}
+                  onEditClick={() => {
+                    setEditRoomData(room);
+                    setEditRoomOpen(true);
+                  }}
                 />
               );
             })}
@@ -316,6 +343,51 @@ export default function RoomsPage() {
             </div>
           </div>
         </div>
+      </Modal>
+
+      <Modal open={editRoomOpen} title="Edit Room" onClose={() => { setEditRoomOpen(false); setEditRoomData(null); }}
+        footer={
+          <div style={{ display: "flex", width: "100%", justifyContent: "space-between" }}>
+            <button className="btn" style={{ color: "var(--color-danger)" }} onClick={handleDeleteRoom}>Delete Room</button>
+            <div style={{ display: "flex", gap: "var(--space-sm)" }}>
+              <button className="btn btn-secondary" onClick={() => { setEditRoomOpen(false); setEditRoomData(null); }}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleEditRoom}>Save Changes</button>
+            </div>
+          </div>
+        }
+      >
+        {editRoomData && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+            <div className="form-group">
+              <label className="form-label">Room Name *</label>
+              <input className="input" value={editRoomData.name} onChange={(e) => setEditRoomData((p) => p ? { ...p, name: e.target.value } : null)} placeholder="e.g. Upper Room C" required />
+            </div>
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label className="form-label">Floor</label>
+                <input className="input" value={editRoomData.floor ?? ""} onChange={(e) => setEditRoomData((p) => p ? { ...p, floor: e.target.value } : null)} placeholder="e.g. 2nd Floor" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Gender</label>
+                <select className="input" value={editRoomData.gender} onChange={(e) => setEditRoomData((p) => p ? { ...p, gender: e.target.value as RoomGender } : null)}>
+                  <option value="MALE">Male</option>
+                  <option value="FEMALE">Female</option>
+                  <option value="MIXED">Mixed</option>
+                </select>
+              </div>
+            </div>
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label className="form-label">Capacity</label>
+                <input className="input" type="number" min={1} max={30} value={editRoomData.capacity} onChange={(e) => setEditRoomData((p) => p ? { ...p, capacity: Number(e.target.value) } : null)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Bed Count</label>
+                <input className="input" type="number" min={1} max={30} value={editRoomData.bedCount} onChange={(e) => setEditRoomData((p) => p ? { ...p, bedCount: Number(e.target.value) } : null)} />
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
     </DndContext>
   );
@@ -439,13 +511,14 @@ interface RoomConflictItem {
   type: string;
 }
 
-function RoomDropZone({ room, members, conflictItems, isOver, groups, onRemove }: {
+function RoomDropZone({ room, members, conflictItems, isOver, groups, onRemove, onEditClick }: {
   room: Room;
   members: Candidate[];
   conflictItems: RoomConflictItem[];
   isOver: boolean;
   groups: { id: string; name: string }[];
   onRemove: (id: string) => void;
+  onEditClick: () => void;
 }) {
   const { setNodeRef } = useDroppable({ id: room.id });
   const conflictIds = new Set(conflictItems.flatMap((i) => [i.aId, i.bId]));
@@ -473,7 +546,14 @@ function RoomDropZone({ room, members, conflictItems, isOver, groups, onRemove }
           <GenderChip gender={room.gender === "MIXED" ? "MALE" : room.gender as Gender} />
           {hasConflicts && <Chip kind="danger">⚠ {conflictItems.length}</Chip>}
         </div>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{members.length}/{room.capacity}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)" }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{members.length}/{room.capacity}</span>
+          <button onClick={onEditClick} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex" }} title="Edit Room">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {room.floor && (

@@ -55,6 +55,7 @@ type Action =
   | { type: "ASSIGN_TO_GROUP"; payload: { candidateId: string; groupId: string | null } }
   | { type: "ADD_ROOM"; payload: Room }
   | { type: "UPDATE_ROOM"; payload: Room }
+  | { type: "DELETE_ROOM"; payload: string }
   | { type: "ASSIGN_TO_ROOM"; payload: { candidateId: string; roomId: string | null } }
   | { type: "ADD_ACTIVITY"; payload: Activity }
   | { type: "LOCK_GROUP"; payload: { groupId: string; locked: boolean } }
@@ -254,6 +255,7 @@ interface AppContextValue extends AppState {
   reorderGroups: (groupIds: string[]) => void;
   addRoom: (room: Room) => void;
   updateRoom: (room: Room) => void;
+  deleteRoom: (id: string) => void;
   assignToRoom: (candidateId: string, roomId: string | null) => void;
 }
 
@@ -667,6 +669,22 @@ export function AppProvider({
     });
   }, []);
 
+  const deleteRoom = useCallback((id: string) => {
+    dispatch({ type: "DELETE_ROOM", payload: id });
+    
+    // Update local table immediately
+    import("./dexie").then(({ db }) => {
+      if (db) {
+        db.rooms.delete(id);
+        db.candidates.where("roomId").equals(id).modify({ roomId: null });
+      }
+    });
+
+    enqueueSync({ action: "delete", entity: "room", entityId: id, payload: {} }).then(() => {
+      flushSyncQueue();
+    });
+  }, []);
+
   const assignToRoom = useCallback((candidateId: string, roomId: string | null) => {
     dispatch({ type: "ASSIGN_TO_ROOM", payload: { candidateId, roomId } });
     const candidate = state.candidates.find((c) => c.id === candidateId);
@@ -714,6 +732,7 @@ export function AppProvider({
     reorderGroups,
     addRoom,
     updateRoom,
+    deleteRoom,
     assignToRoom,
   };
 

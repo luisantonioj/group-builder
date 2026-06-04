@@ -704,9 +704,6 @@ function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onRe
               <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
             </svg>
           </button>
-          <div style={{ width: 26, height: 26, borderRadius: "var(--radius-sm)", background: "var(--color-primary)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-bold)" }}>
-            {group.name.charAt(group.name.length - 1)}
-          </div>
           <span style={{ fontWeight: "var(--font-weight-semibold)", fontSize: "var(--font-size-sm)", color: "var(--text-primary)" }}>{group.name}</span>
           {hasConflicts && <Chip kind="danger">⚠ {conflictItems.length}</Chip>}
           {group.isLocked && <Chip kind="default">🔒</Chip>}
