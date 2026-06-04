@@ -371,36 +371,85 @@ export default function MasterlistPage() {
     const normName = (n: string) => n.toLowerCase().replace(/\s+/g, " ").trim();
     const normContact = (c: string) => c.replace(/[\s\-().+]/g, "");
 
-    // Seed lookup sets from the existing store
-    const seenNames = new Set(candidates.map((c) => normName(c.fullName)));
-    const seenContacts = new Set(
-      candidates.filter((c) => c.contact).map((c) => normContact(c.contact!))
-    );
-
     const freshCandidates: Candidate[] = [];
+    const updatedCandidates: Candidate[] = [];
     const skippedDupes: string[] = [];
+
+    // Helper to check if two fields differ (treating null/undefined as "")
+    const isDiff = (a: any, b: any) => (a == null ? "" : String(a)) !== (b == null ? "" : String(b));
+
+    // Guard against duplicates within the same import file
+    const seenNamesInFile = new Set<string>();
+    const seenContactsInFile = new Set<string>();
 
     for (const c of parsed) {
       const nameKey = normName(c.fullName);
       const contactKey = c.contact ? normContact(c.contact) : null;
-      const isDupe = seenNames.has(nameKey) || (contactKey !== null && seenContacts.has(contactKey));
+      
+      // Check if duplicate within this file
+      if (seenNamesInFile.has(nameKey) || (contactKey && seenContactsInFile.has(contactKey))) {
+         skippedDupes.push(c.fullName);
+         continue;
+      }
 
-      if (isDupe) {
-        skippedDupes.push(c.fullName);
+      // Look for existing candidate in the store
+      let existing = null;
+      if (contactKey) {
+        existing = candidates.find(ec => ec.contact && normContact(ec.contact) === contactKey);
+      }
+      if (!existing) {
+        existing = candidates.find(ec => normName(ec.fullName) === nameKey);
+      }
+
+      if (existing) {
+        // Compare fields
+        if (
+          isDiff(existing.fullName, c.fullName) ||
+          isDiff(existing.gender, c.gender) ||
+          isDiff(existing.age, c.age) ||
+          isDiff(existing.school, c.school) ||
+          isDiff(existing.inviterName, c.inviterName) ||
+          isDiff(existing.howHeard, c.howHeard) ||
+          isDiff(existing.birthday, c.birthday) ||
+          isDiff(existing.address, c.address) ||
+          isDiff(existing.facebook, c.facebook) ||
+          isDiff(existing.contact, c.contact) ||
+          isDiff(existing.fatherName, c.fatherName) ||
+          isDiff(existing.fatherContact, c.fatherContact) ||
+          isDiff(existing.motherName, c.motherName) ||
+          isDiff(existing.motherContact, c.motherContact) ||
+          isDiff(existing.allergies, c.allergies) ||
+          existing.isConfirmed !== c.isConfirmed
+        ) {
+          // Keep existing core fields, overwrite with parsed fields
+          updatedCandidates.push({
+            ...existing,
+            ...c,
+            id: existing.id, // Must preserve original ID
+            groupId: existing.groupId,
+            roomId: existing.roomId,
+            eventId: existing.eventId,
+            createdAt: existing.createdAt,
+            updatedAt: new Date().toISOString()
+          });
+          seenNamesInFile.add(nameKey);
+          if (contactKey) seenContactsInFile.add(contactKey);
+        } else {
+          skippedDupes.push(c.fullName);
+        }
       } else {
         freshCandidates.push(c);
-        // Also guard against duplicates within the same batch being imported
-        seenNames.add(nameKey);
-        if (contactKey) seenContacts.add(contactKey);
+        seenNamesInFile.add(nameKey);
+        if (contactKey) seenContactsInFile.add(contactKey);
       }
     }
 
-    if (freshCandidates.length === 0) {
+    if (freshCandidates.length === 0 && updatedCandidates.length === 0) {
       const n = skippedDupes.length;
       showToast(
         n > 0
-          ? `All ${n} candidates in file already exist in the masterlist.`
-          : "No valid candidates found in the file (check if 'Full Name' is mapped).",
+          ? `All ${n} candidates in file already exist with no new updates.`
+          : "No valid candidates found in the file.",
         "info"
       );
       setImportModalData(null);
@@ -408,62 +457,29 @@ export default function MasterlistPage() {
       return;
     }
 
-    // Update local store with only fresh candidates
-    importCandidates(freshCandidates);
-    setImportModalData(null);
-
-    const buildNote = (created: number, dupes: number) => {
-      const dupeStr = dupes > 0 ? ` · ${dupes} duplicate${dupes !== 1 ? "s" : ""} skipped` : "";
-      return `${created} candidate${created !== 1 ? "s" : ""} imported${dupeStr}`;
-    };
-
-    try {
-      // For the server-side, we send the original rows but only for those that passed the name check.
-      // This ensures indices align with the 'parsed' array from the review step.
-      const sanitizedRows: Record<string, unknown>[] = [];
-      
-      importModalData.rows.forEach((row) => {
-        const fullName = typeof row[mapping["fullName"]] === "string" ? sanitizeCell(row[mapping["fullName"]]) : "";
-        if (!fullName) return;
-
-        const clean: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(row)) {
-          clean[k] = typeof v === "string" ? sanitizeCell(v) : v;
-        }
-        sanitizedRows.push(clean);
-      });
-
-      // Now inject the genders chosen/corrected in the Review stage and the client-generated IDs
-      sanitizedRows.forEach((row, idx) => {
-        const finalCandidate = parsed[idx];
-        if (finalCandidate) {
-          const genderCol = mapping["gender"] || "Imported Gender";
-          row[genderCol] = finalCandidate.gender;
-          row["id"] = finalCandidate.id;
-        }
-      });
-
-      const res = await fetch("/api/candidates/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          rows: sanitizedRows,
-          mapping: mapping["gender"] ? mapping : { ...mapping, gender: "Imported Gender" },
-          eventId: batch.id
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        const serverDupes = data.duplicates?.length ?? 0;
-        showToast(buildNote(data.created ?? freshCandidates.length, serverDupes + skippedDupes.length), "success");
-      } else {
-        showToast(`${buildNote(freshCandidates.length, skippedDupes.length)} (sync pending)`, "info");
-      }
-    } catch {
-      showToast(`${buildNote(freshCandidates.length, skippedDupes.length)} (sync pending)`, "info");
-    } finally {
-      setImporting(false);
+    // Update local store with fresh candidates
+    if (freshCandidates.length > 0) {
+      importCandidates(freshCandidates);
     }
+    
+    // Update local store with modified candidates
+    for (const uc of updatedCandidates) {
+      updateCandidate(uc);
+    }
+
+    setImportModalData(null);
+    setImporting(false);
+
+    const created = freshCandidates.length;
+    const updated = updatedCandidates.length;
+    const dupes = skippedDupes.length;
+    
+    const parts = [];
+    if (created > 0) parts.push(`${created} imported`);
+    if (updated > 0) parts.push(`${updated} updated`);
+    if (dupes > 0) parts.push(`${dupes} skipped`);
+    
+    showToast(parts.join(" · "), "success");
   }
 
   // ── Render ───────────────────────────────────────────────────────────────────
