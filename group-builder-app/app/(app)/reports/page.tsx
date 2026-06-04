@@ -18,9 +18,9 @@ export default function ReportsPage() {
   const [exportOptions, setExportOptions] = useState({
     groups: true,
     rooms: true,
-    conflicts: true,
-    allergies: true,
-    contacts: true,
+    conflicts: false,
+    allergies: false,
+    contacts: false,
   });
 
   const totalCandidates = candidates.length;
@@ -459,16 +459,16 @@ export default function ReportsPage() {
               <input type="checkbox" checked={exportOptions.rooms} onChange={(e) => setExportOptions((prev) => ({ ...prev, rooms: e.target.checked }))} />
               <span className="form-label" style={{ margin: 0 }}>Rooms</span>
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
-              <input type="checkbox" checked={exportOptions.conflicts} onChange={(e) => setExportOptions((prev) => ({ ...prev, conflicts: e.target.checked }))} />
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "not-allowed", opacity: 0.5 }} title="Coming soon">
+              <input type="checkbox" checked={exportOptions.conflicts} disabled onChange={(e) => setExportOptions((prev) => ({ ...prev, conflicts: e.target.checked }))} />
               <span className="form-label" style={{ margin: 0 }}>Conflicts</span>
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
-              <input type="checkbox" checked={exportOptions.allergies} onChange={(e) => setExportOptions((prev) => ({ ...prev, allergies: e.target.checked }))} />
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "not-allowed", opacity: 0.5 }} title="Coming soon">
+              <input type="checkbox" checked={exportOptions.allergies} disabled onChange={(e) => setExportOptions((prev) => ({ ...prev, allergies: e.target.checked }))} />
               <span className="form-label" style={{ margin: 0 }}>Allergies & Care</span>
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
-              <input type="checkbox" checked={exportOptions.contacts} onChange={(e) => setExportOptions((prev) => ({ ...prev, contacts: e.target.checked }))} />
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "not-allowed", opacity: 0.5 }} title="Coming soon">
+              <input type="checkbox" checked={exportOptions.contacts} disabled onChange={(e) => setExportOptions((prev) => ({ ...prev, contacts: e.target.checked }))} />
               <span className="form-label" style={{ margin: 0 }}>Emergency Contacts</span>
             </label>
           </div>
