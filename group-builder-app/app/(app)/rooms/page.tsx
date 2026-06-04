@@ -270,7 +270,12 @@ export default function RoomsPage() {
         {activeDragCandidate && (
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--color-primary)", borderRadius: "var(--radius-md)", padding: "8px 12px", boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: "var(--space-sm)", fontSize: "var(--font-size-sm)", width: 220, opacity: 0.95 }}>
             <Initials name={activeDragCandidate.fullName} gender={activeDragCandidate.gender} size={28} />
-            <span style={{ fontWeight: "var(--font-weight-semibold)" }}>{activeDragCandidate.fullName}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: "var(--font-weight-semibold)" }}>{activeDragCandidate.fullName}</div>
+              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+                {activeDragCandidate.age !== null ? `Age: ${activeDragCandidate.age}` : "Age unknown"}
+              </div>
+            </div>
           </div>
         )}
       </DragOverlay>

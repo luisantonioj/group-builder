@@ -375,7 +375,12 @@ export default function GroupsPage() {
         {!activeDragIsGroup && activeDragCandidate && (
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--color-primary)", borderRadius: "var(--radius-md)", padding: "8px 12px", boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: "var(--space-sm)", fontSize: "var(--font-size-sm)", width: 220, opacity: 0.95 }}>
             <Initials name={activeDragCandidate.fullName} gender={activeDragCandidate.gender} size={28} />
-            <span style={{ fontWeight: "var(--font-weight-semibold)" }}>{activeDragCandidate.fullName}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: "var(--font-weight-semibold)" }}>{activeDragCandidate.fullName}</div>
+              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
+                {activeDragCandidate.age !== null ? `Age: ${activeDragCandidate.age}` : "Age unknown"}
+              </div>
+            </div>
           </div>
         )}
       </DragOverlay>
@@ -561,9 +566,14 @@ function DraggableMember({ candidate: m, isConflict, isLocked, onRemove }: {
       }}
     >
       <Initials name={m.fullName} gender={m.gender} size={22} fontSize={9} />
-      <span style={{ flex: 1, fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", color: isConflict ? "var(--color-conflict-text)" : "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {m.fullName}{isConflict && " ⚠"}
-      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", color: isConflict ? "var(--color-conflict-text)" : "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {m.fullName}{isConflict && " ⚠"}
+        </div>
+        <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
+          {m.age ? `Age ${m.age}` : "Age unknown"}
+        </div>
+      </div>
       {!isLocked && (
         <button
           onPointerDown={(e) => e.stopPropagation()}
