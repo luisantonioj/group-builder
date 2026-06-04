@@ -72,20 +72,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const data = parsed.data;
+  const {
+    birthday, address, facebook, contact,
+    fatherName, fatherContact, motherName, motherContact,
+    allergies, shepherdNotes,
+    ...prismaData
+  } = parsed.data;
 
   // Verify the event belongs to this org
   let event;
   try {
     event = await prisma.event.findFirst({
-      where: { id: data.eventId, orgId: session.orgId },
+      where: { id: prismaData.eventId, orgId: session.orgId },
     });
     if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
   } catch {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
 
-  const contactHash = data.contact ? hmac(data.contact) : undefined;
+  const contactHash = contact ? hmac(contact) : undefined;
 
   // Check for duplicate within the same org
   if (contactHash) {
@@ -100,24 +105,24 @@ export async function POST(req: NextRequest) {
   try {
     const candidate = await prisma.candidate.create({
       data: {
-        ...data,
+        ...prismaData,
         yeBatch: event.name,
         contactHash,
-        birthdayEnc:      data.birthday      ? encrypt(data.birthday)      : null,
-        addressEnc:       data.address       ? encrypt(data.address)       : null,
-        facebookEnc:      data.facebook      ? encrypt(data.facebook)      : null,
-        contactEnc:       data.contact       ? encrypt(data.contact)       : null,
-        fatherNameEnc:    data.fatherName    ? encrypt(data.fatherName)    : null,
-        fatherContactEnc: data.fatherContact ? encrypt(data.fatherContact) : null,
-        motherNameEnc:    data.motherName    ? encrypt(data.motherName)    : null,
-        motherContactEnc: data.motherContact ? encrypt(data.motherContact) : null,
-        allergiesEnc:     data.allergies     ? encrypt(data.allergies)     : null,
-        shepherdNotesEnc: data.shepherdNotes ? encrypt(data.shepherdNotes) : null,
+        birthdayEnc:      birthday      ? encrypt(birthday)      : null,
+        addressEnc:       address       ? encrypt(address)       : null,
+        facebookEnc:      facebook      ? encrypt(facebook)      : null,
+        contactEnc:       contact       ? encrypt(contact)       : null,
+        fatherNameEnc:    fatherName    ? encrypt(fatherName)    : null,
+        fatherContactEnc: fatherContact ? encrypt(fatherContact) : null,
+        motherNameEnc:    motherName    ? encrypt(motherName)    : null,
+        motherContactEnc: motherContact ? encrypt(motherContact) : null,
+        allergiesEnc:     allergies     ? encrypt(allergies)     : null,
+        shepherdNotesEnc: shepherdNotes ? encrypt(shepherdNotes) : null,
       },
     });
     // Co-invitee scan: connect this new candidate with others sharing the same inviter
     if (candidate.inviterName) {
-      const allCandidates = await prisma.candidate.findMany({ where: { eventId: data.eventId } });
+      const allCandidates = await prisma.candidate.findMany({ where: { eventId: prismaData.eventId } });
       const coConns = deriveCoInviteeConnections(allCandidates as unknown as Candidate[]);
       for (const conn of coConns) {
         try {
