@@ -44,6 +44,8 @@ export default function GroupsPage() {
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [overGroupId, setOverGroupId] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [editGroupOpen, setEditGroupOpen] = useState(false);
+  const [editGroupData, setEditGroupData] = useState<Group | null>(null);
   const [keepExisting, setKeepExisting] = useState<boolean | null>(null);
   const [activeDragIsGroup, setActiveDragIsGroup] = useState(false);
   const [groupCountInput, setGroupCountInput] = useState("4");
@@ -248,6 +250,27 @@ export default function GroupsPage() {
     showToast(`Created ${nameEntries.length} groups`, "success");
   }
 
+  function handleEditGroup() {
+    if (!editGroupData) return;
+    updateGroup({
+      ...editGroupData,
+      updatedAt: new Date().toISOString(),
+    });
+    setEditGroupOpen(false);
+    setEditGroupData(null);
+    showToast("Group updated", "success");
+  }
+
+  function handleDeleteGroup() {
+    if (!editGroupData) return;
+    if (confirm(`Are you sure you want to delete ${editGroupData.name}?`)) {
+      deleteGroup(editGroupData.id);
+      setEditGroupOpen(false);
+      setEditGroupData(null);
+      showToast("Group deleted", "success");
+    }
+  }
+
   const totalAssigned = candidates.filter((c) => c.groupId).length;
   const totalConflicts = groupConflicts.length;
 
@@ -350,8 +373,10 @@ export default function GroupsPage() {
                         isFull={isFull}
                         isOver={isOver}
                         onRemove={(cid) => assignToGroup(cid, null)}
-                        onLock={(locked) => lockGroup(group.id, locked)}
-                        onRename={(name) => updateGroup({ ...group, name })}
+                        onEditClick={() => {
+                          setEditGroupData(group);
+                          setEditGroupOpen(true);
+                        }}
                       />
                     );
                   })}
@@ -472,6 +497,39 @@ export default function GroupsPage() {
                   ))}
                 </SortableContext>
               </DndContext>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={editGroupOpen} title="Edit Group" onClose={() => { setEditGroupOpen(false); setEditGroupData(null); }}
+        footer={
+          <div style={{ display: "flex", width: "100%", justifyContent: "space-between" }}>
+            <button className="btn" style={{ color: "var(--color-danger)" }} onClick={handleDeleteGroup}>Delete Group</button>
+            <div style={{ display: "flex", gap: "var(--space-sm)" }}>
+              <button className="btn btn-secondary" onClick={() => { setEditGroupOpen(false); setEditGroupData(null); }}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleEditGroup}>Save Changes</button>
+            </div>
+          </div>
+        }
+      >
+        {editGroupData && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+            <div className="form-group">
+              <label className="form-label">Group Name *</label>
+              <input className="input" value={editGroupData.name} onChange={(e) => setEditGroupData((p) => p ? { ...p, name: e.target.value } : null)} placeholder="e.g. Group 1" required />
+            </div>
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label className="form-label">Capacity</label>
+                <input className="input" type="number" min={1} max={50} value={editGroupData.capacity} onChange={(e) => setEditGroupData((p) => p ? { ...p, capacity: Number(e.target.value) } : null)} />
+              </div>
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', cursor: 'pointer', marginTop: 'var(--space-xl)' }}>
+                  <input type="checkbox" checked={editGroupData.isLocked} onChange={(e) => setEditGroupData((p) => p ? { ...p, isLocked: e.target.checked } : null)} />
+                  <span className="form-label" style={{ margin: 0 }}>Locked</span>
+                </label>
+              </div>
             </div>
           </div>
         )}
@@ -647,15 +705,14 @@ interface ConflictItem {
   type: string;
 }
 
-function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onRemove, onLock, onRename }: {
+function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onRemove, onEditClick }: {
   group: Group;
   members: Candidate[];
   conflictItems: ConflictItem[];
   isFull: boolean;
   isOver: boolean;
   onRemove: (id: string) => void;
-  onLock: (locked: boolean) => void;
-  onRename: (name: string) => void;
+  onEditClick: () => void;
 }) {
   const {
     setNodeRef,
@@ -711,8 +768,10 @@ function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onRe
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
           <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{members.length}/{group.capacity}</span>
-          <button className="btn btn-ghost btn-sm" onClick={() => onLock(!group.isLocked)} title={group.isLocked ? "Unlock" : "Lock"}>
-            {group.isLocked ? "🔓" : "🔒"}
+          <button onClick={onEditClick} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex" }} title="Edit Group">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+            </svg>
           </button>
         </div>
       </div>
