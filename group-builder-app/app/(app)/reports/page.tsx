@@ -3,6 +3,7 @@
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import { useApp } from "@/lib/store";
+import { useToast } from "@/components/ui/toast";
 import { Chip, GenderChip, AllergyBadge } from "@/components/ui/chip";
 import Initials from "@/components/ui/initials";
 import Modal from "@/components/ui/modal";
@@ -11,6 +12,7 @@ type ReportTab = "groups" | "rooms" | "conflicts" | "allergies" | "contacts";
 
 export default function ReportsPage() {
   const { candidates, groups, rooms, allConflicts, connections, event: batch } = useApp();
+  const { showToast } = useToast();
   const [tab, setTab] = useState<ReportTab>("groups");
   const [exportOpen, setExportOpen] = useState(false);
   const [exportOptions, setExportOptions] = useState({
@@ -187,11 +189,28 @@ export default function ReportsPage() {
 
       {/* Tabs */}
       <div className="tabs" style={{ marginBottom: "var(--space-xl)" }}>
-        {(["groups", "rooms", "conflicts", "allergies", "contacts"] as const).map((t) => (
-          <button key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-          </button>
-        ))}
+        {(["groups", "rooms", "conflicts", "allergies", "contacts"] as const).map((t) => {
+          const isComingSoon = ["conflicts", "allergies", "contacts"].includes(t);
+          return (
+            <button
+              key={t}
+              className={`tab ${tab === t ? "active" : ""}`}
+              onClick={() => {
+                if (isComingSoon) {
+                  showToast("Coming soon feature", "info");
+                } else {
+                  setTab(t);
+                }
+              }}
+              style={{
+                opacity: isComingSoon ? 0.5 : 1,
+                cursor: isComingSoon ? "not-allowed" : "pointer"
+              }}
+            >
+              {t === "allergies" ? "Allergies & Care" : t === "contacts" ? "Emergency Contacts" : t.charAt(0).toUpperCase() + t.slice(1)}
+            </button>
+          );
+        })}
       </div>
 
       {/* Group Rosters */}
