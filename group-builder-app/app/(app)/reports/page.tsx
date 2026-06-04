@@ -391,7 +391,9 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody>
-                {candidates.map((c) => (
+                {candidates
+                  .filter((c) => c.fatherName || c.fatherContact || c.motherName || c.motherContact)
+                  .map((c) => (
                   <tr key={c.id}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
@@ -406,6 +408,9 @@ export default function ReportsPage() {
                     <td style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-sm)" }}>{c.motherContact ?? "—"}</td>
                   </tr>
                 ))}
+                {candidates.filter((c) => c.fatherName || c.fatherContact || c.motherName || c.motherContact).length === 0 && (
+                  <tr><td colSpan={6} style={{ textAlign: "center", padding: "var(--space-xl)", color: "var(--text-muted)" }}>No emergency contacts provided</td></tr>
+                )}
               </tbody>
             </table>
           </div>

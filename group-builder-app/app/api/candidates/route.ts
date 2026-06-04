@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
-import { hmac } from "@/lib/crypto";
+import { hmac, encrypt } from "@/lib/crypto";
 import { z } from "zod";
 import { deriveCoInviteeConnections } from "@/lib/conflict-detection";
 import type { Candidate } from "@/types";
@@ -103,16 +103,16 @@ export async function POST(req: NextRequest) {
         ...data,
         yeBatch: event.name,
         contactHash,
-        birthdayEnc:      data.birthday      ?? null,
-        addressEnc:       data.address       ?? null,
-        facebookEnc:      data.facebook      ?? null,
-        contactEnc:       data.contact       ?? null,
-        fatherNameEnc:    data.fatherName    ?? null,
-        fatherContactEnc: data.fatherContact ?? null,
-        motherNameEnc:    data.motherName    ?? null,
-        motherContactEnc: data.motherContact ?? null,
-        allergiesEnc:     data.allergies     ?? null,
-        shepherdNotesEnc: data.shepherdNotes ?? null,
+        birthdayEnc:      data.birthday      ? encrypt(data.birthday)      : null,
+        addressEnc:       data.address       ? encrypt(data.address)       : null,
+        facebookEnc:      data.facebook      ? encrypt(data.facebook)      : null,
+        contactEnc:       data.contact       ? encrypt(data.contact)       : null,
+        fatherNameEnc:    data.fatherName    ? encrypt(data.fatherName)    : null,
+        fatherContactEnc: data.fatherContact ? encrypt(data.fatherContact) : null,
+        motherNameEnc:    data.motherName    ? encrypt(data.motherName)    : null,
+        motherContactEnc: data.motherContact ? encrypt(data.motherContact) : null,
+        allergiesEnc:     data.allergies     ? encrypt(data.allergies)     : null,
+        shepherdNotesEnc: data.shepherdNotes ? encrypt(data.shepherdNotes) : null,
       },
     });
     // Co-invitee scan: connect this new candidate with others sharing the same inviter
