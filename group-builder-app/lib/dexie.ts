@@ -7,7 +7,7 @@
 import Dexie, { type Table } from "dexie";
 import type { Candidate, Connection, Group, Room, Activity } from "@/types";
 
-interface SyncQueueItem {
+export interface SyncQueueItem {
   id?: number;
   action: "create" | "update" | "delete";
   entity: "candidate" | "group" | "room" | "connection";
@@ -68,12 +68,72 @@ class GroupBuilderDB extends Dexie {
 
 export const db = typeof window !== "undefined" ? new GroupBuilderDB() : null;
 
+function notifySyncQueueChanged() {
+  if (typeof window === "undefined") return;
+
+  const channel = new BroadcastChannel("group-builder-sync");
+  channel.postMessage({ type: "SYNC_QUEUE_CHANGED" });
+  channel.close();
+}
+
+const API_FIELDS: Record<SyncQueueItem["entity"], string[]> = {
+  candidate: [
+    "id",
+    "fullName",
+    "lastName",
+    "firstName",
+    "gender",
+    "age",
+    "school",
+    "inviterName",
+    "howHeard",
+    "yeBatch",
+    "birthday",
+    "address",
+    "facebook",
+    "contact",
+    "fatherName",
+    "fatherContact",
+    "motherName",
+    "motherContact",
+    "allergies",
+    "shepherdNotes",
+    "isConfirmed",
+    "groupId",
+    "roomId",
+    "eventId",
+  ],
+  group: ["id", "name", "label", "capacity", "order", "isLocked", "eventId"],
+  room: ["id", "name", "floor", "building", "capacity", "bedCount", "gender", "eventId"],
+  connection: [
+    "id",
+    "fromId",
+    "toId",
+    "eventId",
+    "relationshipType",
+    "source",
+    "note",
+    "confirmed",
+  ],
+};
+
+function sanitizePayload(entity: SyncQueueItem["entity"], payload: unknown) {
+  if (!payload || typeof payload !== "object") return payload;
+
+  const source = payload as Record<string, unknown>;
+  return API_FIELDS[entity].reduce<Record<string, unknown>>((clean, key) => {
+    if (source[key] !== undefined) clean[key] = source[key];
+    return clean;
+  }, {});
+}
+
 // Enqueue a write operation for later sync
 export async function enqueueSync(
   item: Omit<SyncQueueItem, "id" | "timestamp" | "retries">
 ) {
   if (!db) return;
   await db.syncQueue.add({ ...item, timestamp: Date.now(), retries: 0 });
+  notifySyncQueueChanged();
 }
 
 let isFlushing = false;
@@ -95,10 +155,13 @@ export async function flushSyncQueue(onProgress?: (pending: number) => void) {
         const res = await fetch(url, {
           method,
           headers: { "Content-Type": "application/json" },
-          body: item.action !== "delete" ? JSON.stringify(item.payload) : undefined,
+          body:
+            item.action !== "delete"
+              ? JSON.stringify(sanitizePayload(item.entity, item.payload))
+              : undefined,
         });
 
-        if (res.ok && item.id != null) {
+        if ((res.ok || (item.action === "delete" && res.status === 404)) && item.id != null) {
           await db.syncQueue.delete(item.id);
         } else if (!res.ok) {
           const isTransient = res.status >= 500 || res.status === 429;
@@ -118,9 +181,14 @@ export async function flushSyncQueue(onProgress?: (pending: number) => void) {
 
     const remaining = await db.syncQueue.count();
     onProgress?.(remaining);
+    notifySyncQueueChanged();
   } finally {
     isFlushing = false;
   }
+}
+
+export function broadcastSyncQueueChanged() {
+  notifySyncQueueChanged();
 }
 
 // Seed local DB from server response

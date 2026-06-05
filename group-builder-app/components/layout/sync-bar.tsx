@@ -1,12 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { flushSyncQueue } from "@/lib/dexie";
-
 export default function SyncBar() {
   const [online, setOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
+
+  async function refreshPendingCount() {
+    try {
+      const { db } = await import("@/lib/dexie");
+      if (db) {
+        setPendingCount(await db.syncQueue.count());
+      }
+    } catch {
+      // IndexedDB unavailable — ignore
+    }
+  }
 
   // Read real pending count from IndexedDB on mount and trigger flush
   useEffect(() => {
@@ -27,6 +36,16 @@ export default function SyncBar() {
       }
     }
     loadPendingAndFlush();
+  }, []);
+
+  useEffect(() => {
+    const channel = new BroadcastChannel("group-builder-sync");
+    channel.onmessage = (event) => {
+      if (event.data.type === "SYNC_QUEUE_CHANGED" || event.data.type === "REFRESH_DATA") {
+        refreshPendingCount();
+      }
+    };
+    return () => channel.close();
   }, []);
 
   useEffect(() => {

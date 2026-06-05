@@ -21,7 +21,7 @@ import {
   deriveAutoConnections,
 } from "./conflict-detection";
 import type { Candidate, Connection, Group, Room, Activity, Event, Conflict } from "@/types";
-import { enqueueSync, flushSyncQueue } from "./dexie";
+import { broadcastSyncQueueChanged, db, flushSyncQueue, type SyncQueueItem } from "./dexie";
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -169,6 +169,14 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         rooms: state.rooms.map((r) => (r.id === action.payload.id ? action.payload : r)),
       };
+    case "DELETE_ROOM":
+      return {
+        ...state,
+        rooms: state.rooms.filter((r) => r.id !== action.payload),
+        candidates: state.candidates.map((c) =>
+          c.roomId === action.payload ? { ...c, roomId: null } : c
+        ),
+      };
     case "ASSIGN_TO_ROOM":
       return {
         ...state,
@@ -261,6 +269,72 @@ interface AppContextValue extends AppState {
 
 const AppContext = createContext<AppContextValue>(null!);
 
+async function readEventDataFromDexie(eventId: string) {
+  if (!db) return null;
+  const database = db;
+
+  const [cands, grps, rms, conns, acts] = await Promise.all([
+    database.candidates.where("eventId").equals(eventId).toArray(),
+    database.groups.where("eventId").equals(eventId).sortBy("order"),
+    database.rooms.where("eventId").equals(eventId).toArray(),
+    database.connections.where("eventId").equals(eventId).toArray(),
+    database.activities.orderBy("createdAt").reverse().limit(50).toArray(),
+  ]);
+
+  return { candidates: cands, groups: grps, rooms: rms, connections: conns, activities: acts };
+}
+
+async function replaceEventDataInDexie(eventId: string, data: Partial<AppState>) {
+  if (!db) return;
+  const database = db;
+
+  await database.transaction(
+    "rw",
+    database.candidates,
+    database.connections,
+    database.groups,
+    database.rooms,
+    async () => {
+      if (data.candidates) {
+        await database.candidates.where("eventId").equals(eventId).delete();
+        await database.candidates.bulkPut(data.candidates);
+      }
+      if (data.groups) {
+        await database.groups.where("eventId").equals(eventId).delete();
+        await database.groups.bulkPut(data.groups);
+      }
+      if (data.rooms) {
+        await database.rooms.where("eventId").equals(eventId).delete();
+        await database.rooms.bulkPut(data.rooms);
+      }
+      if (data.connections) {
+        await database.connections.where("eventId").equals(eventId).delete();
+        await database.connections.bulkPut(data.connections);
+      }
+    }
+  );
+}
+
+async function persistOfflineWrite(
+  write: () => Promise<void>,
+  items: Array<Omit<SyncQueueItem, "id" | "timestamp" | "retries">>
+) {
+  if (!db) return;
+  const database = db;
+
+  await database.transaction(
+    "rw",
+    [database.candidates, database.connections, database.groups, database.rooms, database.activities, database.syncQueue],
+    async () => {
+      await write();
+      await database.syncQueue.bulkAdd(
+        items.map((item) => ({ ...item, timestamp: Date.now(), retries: 0 }))
+      );
+    }
+  );
+  broadcastSyncQueueChanged();
+}
+
 export function AppProvider({
   children,
   initialEvent = null,
@@ -336,25 +410,21 @@ export function AppProvider({
   const loadEventData = useCallback(async (eventId: string) => {
     // 1. Try to load from IndexedDB (Dexie) first for immediate, offline-first display
     try {
-      const { db } = await import("./dexie");
-      if (db) {
-        const [cands, grps, rms, conns, acts] = await Promise.all([
-          db.candidates.where("eventId").equals(eventId).toArray(),
-          db.groups.where("eventId").equals(eventId).sortBy("order"),
-          db.rooms.where("eventId").equals(eventId).toArray(),
-          db.connections.where("eventId").equals(eventId).toArray(),
-          db.activities.orderBy("createdAt").reverse().limit(50).toArray(),
-        ]);
-        if (cands.length > 0 || grps.length > 0) {
-          dispatch({
-            type: "SET_APP_DATA",
-            payload: { candidates: cands, groups: grps, rooms: rms, connections: conns, activities: acts },
-          });
-        }
+      const localData = await readEventDataFromDexie(eventId);
+      if (localData && (localData.candidates.length > 0 || localData.groups.length > 0 || localData.rooms.length > 0 || localData.connections.length > 0)) {
+        dispatch({
+          type: "SET_APP_DATA",
+          payload: localData,
+        });
       }
     } catch {
       // Ignore Dexie errors
     }
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
+    const pendingLocalWrites = db ? await db.syncQueue.count().catch(() => 0) : 0;
+    if (pendingLocalWrites > 0) return;
 
     // 2. Then, fetch from the server to ensure we have the latest data
     try {
@@ -392,9 +462,8 @@ export function AppProvider({
       if (hasNewData) {
         dispatch({ type: "SET_APP_DATA", payload: newData });
 
-        // 3. Hydrate local DB with fresh data from server
-        const { hydrateFromServer } = await import("./dexie");
-        hydrateFromServer(newData);
+        // 3. Replace local event data so deleted server rows do not reappear offline.
+        await replaceEventDataInDexie(eventId, newData);
       }
     } catch {
       // Silently ignore network errors — app stays with Dexie data
@@ -409,20 +478,9 @@ export function AppProvider({
     channel.onmessage = (event) => {
       if (event.data.type === "REFRESH_DATA" && event.data.eventId === state.event.id) {
         // Reload from Dexie (which has been updated by the other tab)
-        import("./dexie").then(({ db }) => {
-          if (db) {
-            Promise.all([
-              db.candidates.where("eventId").equals(state.event.id).toArray(),
-              db.groups.where("eventId").equals(state.event.id).sortBy("order"),
-              db.rooms.where("eventId").equals(state.event.id).toArray(),
-              db.connections.where("eventId").equals(state.event.id).toArray(),
-              db.activities.orderBy("createdAt").reverse().limit(50).toArray(),
-            ]).then(([cands, grps, rms, conns, acts]) => {
-              dispatch({
-                type: "SET_APP_DATA",
-                payload: { candidates: cands, groups: grps, rooms: rms, connections: conns, activities: acts },
-              });
-            });
+        readEventDataFromDexie(state.event.id).then((data) => {
+          if (data) {
+            dispatch({ type: "SET_APP_DATA", payload: data });
           }
         });
       }
@@ -446,63 +504,54 @@ export function AppProvider({
   const addCandidate = useCallback((candidate: Candidate) => {
     dispatch({ type: "ADD_CANDIDATE", payload: candidate });
     addActivity(`Added candidate: ${candidate.fullName}`, "candidate", "created");
-    
-    // Update local table immediately for persistence
-    import("./dexie").then(({ db }) => {
-      if (db) db.candidates.put(candidate);
-    });
 
-    notifyOtherTabs();
-    enqueueSync({ action: "create", entity: "candidate", entityId: candidate.id, payload: candidate }).then(() => {
+    persistOfflineWrite(
+      () => db!.candidates.put(candidate).then(() => undefined),
+      [{ action: "create", entity: "candidate", entityId: candidate.id, payload: candidate }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [addActivity, notifyOtherTabs]);
 
   const updateCandidate = useCallback(async (candidate: Candidate) => {
     dispatch({ type: "UPDATE_CANDIDATE", payload: candidate });
-    
-    // Update local table immediately for persistence
-    import("./dexie").then(({ db }) => {
-      if (db) db.candidates.put(candidate);
-    });
 
-    notifyOtherTabs();
-    enqueueSync({ action: "update", entity: "candidate", entityId: candidate.id, payload: candidate }).then(() => {
+    persistOfflineWrite(
+      () => db!.candidates.put(candidate).then(() => undefined),
+      [{ action: "update", entity: "candidate", entityId: candidate.id, payload: candidate }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [notifyOtherTabs]);
 
   const deleteCandidate = useCallback((id: string) => {
     dispatch({ type: "DELETE_CANDIDATE", payload: id });
-    
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) {
-        db.candidates.delete(id);
-        db.connections.where("fromId").equals(id).or("toId").equals(id).delete();
-      }
-    });
 
-    notifyOtherTabs();
-    enqueueSync({ action: "delete", entity: "candidate", entityId: id, payload: {} }).then(() => {
+    persistOfflineWrite(
+      async () => {
+        await db!.candidates.delete(id);
+        await db!.connections.where("fromId").equals(id).or("toId").equals(id).delete();
+      },
+      [{ action: "delete", entity: "candidate", entityId: id, payload: {} }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [notifyOtherTabs]);
 
   const deleteCandidates = useCallback((ids: string[]) => {
     dispatch({ type: "DELETE_CANDIDATES", payload: ids });
-    
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) {
-        db.candidates.bulkDelete(ids);
-        db.connections.where("fromId").anyOf(ids).or("toId").anyOf(ids).delete();
-      }
-    });
 
-    notifyOtherTabs();
-    // Batch delete is handled individually in sync queue for simplicity
-    Promise.all(ids.map(id => enqueueSync({ action: "delete", entity: "candidate", entityId: id, payload: {} }))).then(() => {
+    persistOfflineWrite(
+      async () => {
+        await db!.candidates.bulkDelete(ids);
+        await db!.connections.where("fromId").anyOf(ids).or("toId").anyOf(ids).delete();
+      },
+      ids.map((id) => ({ action: "delete", entity: "candidate", entityId: id, payload: {} }))
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [notifyOtherTabs]);
@@ -511,14 +560,11 @@ export function AppProvider({
     dispatch({ type: "SET_CANDIDATES", payload: [...candidates, ...state.candidates] });
     addActivity(`Imported ${candidates.length} candidates`, "candidate", "imported");
     
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) db.candidates.bulkPut(candidates);
-    });
-
-    notifyOtherTabs();
-    // To ensure persistence if page is refreshed before server responds:
-    Promise.all(candidates.map(c => enqueueSync({ action: "create", entity: "candidate", entityId: c.id, payload: c }))).then(() => {
+    persistOfflineWrite(
+      () => db!.candidates.bulkPut(candidates).then(() => undefined),
+      candidates.map((c) => ({ action: "create", entity: "candidate", entityId: c.id, payload: c }))
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [state.candidates, addActivity, notifyOtherTabs]);
@@ -529,13 +575,11 @@ export function AppProvider({
     dispatch({ type: "ADD_CONNECTION", payload: connection });
     addActivity(`Added connection: ${conn.fromName} ↔ ${conn.toName}`, "connection", "created");
     
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) db.connections.put(connection);
-    });
-
-    notifyOtherTabs();
-    enqueueSync({ action: "create", entity: "connection", entityId: connection.id, payload: connection }).then(() => {
+    persistOfflineWrite(
+      () => db!.connections.put(connection).then(() => undefined),
+      [{ action: "create", entity: "connection", entityId: connection.id, payload: connection }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [state.event.id, addActivity, notifyOtherTabs]);
@@ -544,13 +588,11 @@ export function AppProvider({
     const connection = { ...conn, eventId: state.event.id };
     dispatch({ type: "UPDATE_CONNECTION", payload: connection });
     
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) db.connections.put(connection);
-    });
-
-    notifyOtherTabs();
-    enqueueSync({ action: "update", entity: "connection", entityId: connection.id, payload: connection }).then(() => {
+    persistOfflineWrite(
+      () => db!.connections.put(connection).then(() => undefined),
+      [{ action: "update", entity: "connection", entityId: connection.id, payload: connection }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [state.event.id, notifyOtherTabs]);
@@ -558,13 +600,11 @@ export function AppProvider({
   const confirmConnection = useCallback((id: string) => {
     dispatch({ type: "CONFIRM_CONNECTION", payload: id });
     
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) db.connections.update(id, { confirmed: true });
-    });
-
-    notifyOtherTabs();
-    enqueueSync({ action: "update", entity: "connection", entityId: id, payload: { confirmed: true } }).then(() => {
+    persistOfflineWrite(
+      () => db!.connections.update(id, { confirmed: true }).then(() => undefined),
+      [{ action: "update", entity: "connection", entityId: id, payload: { confirmed: true } }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [notifyOtherTabs]);
@@ -572,13 +612,11 @@ export function AppProvider({
   const deleteConnection = useCallback((id: string) => {
     dispatch({ type: "DELETE_CONNECTION", payload: id });
     
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) db.connections.delete(id);
-    });
-
-    notifyOtherTabs();
-    enqueueSync({ action: "delete", entity: "connection", entityId: id, payload: {} }).then(() => {
+    persistOfflineWrite(
+      () => db!.connections.delete(id).then(() => undefined),
+      [{ action: "delete", entity: "connection", entityId: id, payload: {} }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [notifyOtherTabs]);
@@ -587,13 +625,11 @@ export function AppProvider({
     dispatch({ type: "ADD_GROUP", payload: group });
     addActivity(`Created group: ${group.name}`, "group", "created");
     
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) db.groups.put(group);
-    });
-
-    notifyOtherTabs();
-    enqueueSync({ action: "create", entity: "group", entityId: group.id, payload: group }).then(() => {
+    persistOfflineWrite(
+      () => db!.groups.put(group).then(() => undefined),
+      [{ action: "create", entity: "group", entityId: group.id, payload: group }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [addActivity, notifyOtherTabs]);
@@ -601,13 +637,11 @@ export function AppProvider({
   const updateGroup = useCallback((group: Group) => {
     dispatch({ type: "UPDATE_GROUP", payload: group });
     
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) db.groups.put(group);
-    });
-
-    notifyOtherTabs();
-    enqueueSync({ action: "update", entity: "group", entityId: group.id, payload: group }).then(() => {
+    persistOfflineWrite(
+      () => db!.groups.put(group).then(() => undefined),
+      [{ action: "update", entity: "group", entityId: group.id, payload: group }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [notifyOtherTabs]);
@@ -615,16 +649,14 @@ export function AppProvider({
   const deleteGroup = useCallback((id: string) => {
     dispatch({ type: "DELETE_GROUP", payload: id });
     
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) {
-        db.groups.delete(id);
-        db.candidates.where("groupId").equals(id).modify({ groupId: null });
-      }
-    });
-
-    notifyOtherTabs();
-    enqueueSync({ action: "delete", entity: "group", entityId: id, payload: {} }).then(() => {
+    persistOfflineWrite(
+      async () => {
+        await db!.groups.delete(id);
+        await db!.candidates.where("groupId").equals(id).modify({ groupId: null });
+      },
+      [{ action: "delete", entity: "group", entityId: id, payload: {} }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [notifyOtherTabs]);
@@ -638,13 +670,11 @@ export function AppProvider({
       else addActivity(`Removed ${candidate.fullName} from group`, "group", "removed");
     }
 
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) db.candidates.update(candidateId, { groupId });
-    });
-
-    notifyOtherTabs();
-    enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } }).then(() => {
+    persistOfflineWrite(
+      () => db!.candidates.update(candidateId, { groupId }).then(() => undefined),
+      [{ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [state.candidates, state.groups, addActivity, notifyOtherTabs]);
@@ -657,48 +687,53 @@ export function AppProvider({
       candidates: state.candidates.filter((c) => c.groupId === g.id),
     }));
     const assignments = autoDistributeImpl(unassigned, groupsForDist, adjacency);
+    const syncItems: Array<Omit<SyncQueueItem, "id" | "timestamp" | "retries">> = [];
     assignments.forEach((groupId, candidateId) => {
       dispatch({ type: "ASSIGN_TO_GROUP", payload: { candidateId, groupId } });
-      
-      // Update local table immediately
-      import("./dexie").then(({ db }) => {
-        if (db) db.candidates.update(candidateId, { groupId });
-      });
-
-      enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } });
+      syncItems.push({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } });
     });
-    notifyOtherTabs();
-    flushSyncQueue();
+    persistOfflineWrite(
+      async () => {
+        for (const [candidateId, groupId] of assignments) {
+          await db!.candidates.update(candidateId, { groupId });
+        }
+      },
+      syncItems
+    ).then(() => {
+      notifyOtherTabs();
+      flushSyncQueue();
+    });
     addActivity(`Auto-distributed ${assignments.size} candidates`, "group", "assigned");
   }, [state.candidates, state.groups, adjacency, addActivity, notifyOtherTabs]);
 
   const clearAllGroups = useCallback(() => {
-    state.candidates.forEach((c) => {
+    const assigned = state.candidates.filter((c) => c.groupId);
+    assigned.forEach((c) => {
       if (c.groupId) {
         dispatch({ type: "ASSIGN_TO_GROUP", payload: { candidateId: c.id, groupId: null } });
-        
-        // Update local table immediately
-        import("./dexie").then(({ db }) => {
-          if (db) db.candidates.update(c.id, { groupId: null });
-        });
-
-        enqueueSync({ action: "update", entity: "candidate", entityId: c.id, payload: { groupId: null } });
       }
     });
-    notifyOtherTabs();
-    flushSyncQueue();
+    persistOfflineWrite(
+      async () => {
+        for (const c of assigned) {
+          await db!.candidates.update(c.id, { groupId: null });
+        }
+      },
+      assigned.map((c) => ({ action: "update", entity: "candidate", entityId: c.id, payload: { groupId: null } }))
+    ).then(() => {
+      notifyOtherTabs();
+      flushSyncQueue();
+    });
   }, [state.candidates, notifyOtherTabs]);
 
   const lockGroup = useCallback((groupId: string, locked: boolean) => {
     dispatch({ type: "LOCK_GROUP", payload: { groupId, locked } });
     
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) db.groups.update(groupId, { isLocked: locked });
-    });
-
-    notifyOtherTabs();
-    enqueueSync({ action: "update", entity: "group", entityId: groupId, payload: { isLocked: locked } }).then(() => {
+    persistOfflineWrite(
+      () => db!.groups.update(groupId, { isLocked: locked }).then(() => undefined),
+      [{ action: "update", entity: "group", entityId: groupId, payload: { isLocked: locked } }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [notifyOtherTabs]);
@@ -706,66 +741,60 @@ export function AppProvider({
   const reorderGroups = useCallback((groupIds: string[]) => {
     dispatch({ type: "REORDER_GROUPS", payload: groupIds });
     
-    // Update local table and sync queue
-    import("./dexie").then(({ db }) => {
-      if (db) {
-        groupIds.forEach((id, index) => {
-          db.groups.update(id, { order: index });
-          enqueueSync({ 
-            action: "update", 
-            entity: "group", 
-            entityId: id, 
-            payload: { order: index } 
-          });
-        });
-        notifyOtherTabs();
-        flushSyncQueue();
-      }
+    persistOfflineWrite(
+      async () => {
+        for (const [index, id] of groupIds.entries()) {
+          await db!.groups.update(id, { order: index });
+        }
+      },
+      groupIds.map((id, index) => ({
+        action: "update",
+        entity: "group",
+        entityId: id,
+        payload: { order: index },
+      }))
+    ).then(() => {
+      notifyOtherTabs();
+      flushSyncQueue();
     });
   }, [notifyOtherTabs]);
 
   const addRoom = useCallback((room: Room) => {
     dispatch({ type: "ADD_ROOM", payload: room });
     addActivity(`Created room: ${room.name}`, "room", "created");
-    
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) db.rooms.put(room);
-    });
 
-    notifyOtherTabs();
-    enqueueSync({ action: "create", entity: "room", entityId: room.id, payload: room }).then(() => {
+    persistOfflineWrite(
+      () => db!.rooms.put(room).then(() => undefined),
+      [{ action: "create", entity: "room", entityId: room.id, payload: room }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [addActivity, notifyOtherTabs]);
 
   const updateRoom = useCallback((room: Room) => {
     dispatch({ type: "UPDATE_ROOM", payload: room });
-    
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) db.rooms.put(room);
-    });
 
-    notifyOtherTabs();
-    enqueueSync({ action: "update", entity: "room", entityId: room.id, payload: room }).then(() => {
+    persistOfflineWrite(
+      () => db!.rooms.put(room).then(() => undefined),
+      [{ action: "update", entity: "room", entityId: room.id, payload: room }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [notifyOtherTabs]);
 
   const deleteRoom = useCallback((id: string) => {
     dispatch({ type: "DELETE_ROOM", payload: id });
-    
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) {
-        db.rooms.delete(id);
-        db.candidates.where("roomId").equals(id).modify({ roomId: null });
-      }
-    });
 
-    notifyOtherTabs();
-    enqueueSync({ action: "delete", entity: "room", entityId: id, payload: {} }).then(() => {
+    persistOfflineWrite(
+      async () => {
+        await db!.rooms.delete(id);
+        await db!.candidates.where("roomId").equals(id).modify({ roomId: null });
+      },
+      [{ action: "delete", entity: "room", entityId: id, payload: {} }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [notifyOtherTabs]);
@@ -779,13 +808,11 @@ export function AppProvider({
       else addActivity(`Removed ${candidate.fullName} from room`, "room", "removed");
     }
 
-    // Update local table immediately
-    import("./dexie").then(({ db }) => {
-      if (db) db.candidates.update(candidateId, { roomId });
-    });
-
-    notifyOtherTabs();
-    enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { roomId } }).then(() => {
+    persistOfflineWrite(
+      () => db!.candidates.update(candidateId, { roomId }).then(() => undefined),
+      [{ action: "update", entity: "candidate", entityId: candidateId, payload: { roomId } }]
+    ).then(() => {
+      notifyOtherTabs();
       flushSyncQueue();
     });
   }, [state.candidates, state.rooms, addActivity, notifyOtherTabs]);
