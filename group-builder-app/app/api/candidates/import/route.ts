@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
             create: {
               fromId: candidate.id,
               toId: match.candidate.id,
+              eventId,
               relationshipType: "OTHER",
               source: "AUTO",
               note: `Auto-matched from inviter field: "${inviterRaw}"`,
@@ -132,6 +133,7 @@ export async function POST(req: NextRequest) {
         create: {
           fromId: conn.fromId,
           toId: conn.toId,
+          eventId,
           relationshipType: conn.relationshipType,
           source: "AUTO",
           note: conn.note,

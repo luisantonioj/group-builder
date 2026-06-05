@@ -132,6 +132,7 @@ export async function POST(req: NextRequest) {
             create: {
               fromId: conn.fromId,
               toId: conn.toId,
+              eventId: prismaData.eventId,
               relationshipType: conn.relationshipType,
               source: "AUTO",
               note: conn.note,

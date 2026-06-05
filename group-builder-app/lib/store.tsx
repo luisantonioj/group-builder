@@ -365,28 +365,78 @@ export function AppProvider({
         fetch(`/api/connections?eventId=${eventId}`).then((r) => r.json()),
       ]);
 
-      const data = {
-        candidates:  candidatesRes.status  === "fulfilled" ? (candidatesRes.value.data  ?? []) : [],
-        groups:      groupsRes.status      === "fulfilled" ? (groupsRes.value.data      ?? []) : [],
-        rooms:       roomsRes.status       === "fulfilled" ? (roomsRes.value.data       ?? []) : [],
-        connections: connectionsRes.status === "fulfilled"
-          ? (connectionsRes.value.data ?? []).map((c: Connection & { from?: { fullName: string }; to?: { fullName: string } }) => ({
-              ...c,
-              fromName: c.from?.fullName ?? c.fromName,
-              toName:   c.to?.fullName   ?? c.toName,
-            }))
-          : [],
-      };
+      const newData: Partial<AppState> = {};
+      let hasNewData = false;
 
-      dispatch({ type: "SET_APP_DATA", payload: data });
+      if (candidatesRes.status === "fulfilled" && candidatesRes.value.data) {
+        newData.candidates = candidatesRes.value.data;
+        hasNewData = true;
+      }
+      if (groupsRes.status === "fulfilled" && groupsRes.value.data) {
+        newData.groups = groupsRes.value.data;
+        hasNewData = true;
+      }
+      if (roomsRes.status === "fulfilled" && roomsRes.value.data) {
+        newData.rooms = roomsRes.value.data;
+        hasNewData = true;
+      }
+      if (connectionsRes.status === "fulfilled" && connectionsRes.value.data) {
+        newData.connections = connectionsRes.value.data.map((c: Connection & { from?: { fullName: string }; to?: { fullName: string } }) => ({
+          ...c,
+          fromName: c.from?.fullName ?? c.fromName,
+          toName:   c.to?.fullName   ?? c.toName,
+        }));
+        hasNewData = true;
+      }
 
-      // 3. Hydrate local DB with fresh data from server
-      const { hydrateFromServer } = await import("./dexie");
-      hydrateFromServer(data);
+      if (hasNewData) {
+        dispatch({ type: "SET_APP_DATA", payload: newData });
+
+        // 3. Hydrate local DB with fresh data from server
+        const { hydrateFromServer } = await import("./dexie");
+        hydrateFromServer(newData);
+      }
     } catch {
       // Silently ignore network errors — app stays with Dexie data
     }
   }, []);
+
+  // ── Sync across tabs ─────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const channel = new BroadcastChannel("group-builder-sync");
+    channel.onmessage = (event) => {
+      if (event.data.type === "REFRESH_DATA" && event.data.eventId === state.event.id) {
+        // Reload from Dexie (which has been updated by the other tab)
+        import("./dexie").then(({ db }) => {
+          if (db) {
+            Promise.all([
+              db.candidates.where("eventId").equals(state.event.id).toArray(),
+              db.groups.where("eventId").equals(state.event.id).sortBy("order"),
+              db.rooms.where("eventId").equals(state.event.id).toArray(),
+              db.connections.where("eventId").equals(state.event.id).toArray(),
+              db.activities.orderBy("createdAt").reverse().limit(50).toArray(),
+            ]).then(([cands, grps, rms, conns, acts]) => {
+              dispatch({
+                type: "SET_APP_DATA",
+                payload: { candidates: cands, groups: grps, rooms: rms, connections: conns, activities: acts },
+              });
+            });
+          }
+        });
+      }
+    };
+    return () => channel.close();
+  }, [state.event.id]);
+
+  const notifyOtherTabs = useCallback(() => {
+    if (typeof window !== "undefined") {
+      const channel = new BroadcastChannel("group-builder-sync");
+      channel.postMessage({ type: "REFRESH_DATA", eventId: state.event.id });
+      channel.close();
+    }
+  }, [state.event.id]);
 
   // Load data from the API whenever the active event changes
   useEffect(() => {
@@ -402,10 +452,11 @@ export function AppProvider({
       if (db) db.candidates.put(candidate);
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "create", entity: "candidate", entityId: candidate.id, payload: candidate }).then(() => {
       flushSyncQueue();
     });
-  }, [addActivity]);
+  }, [addActivity, notifyOtherTabs]);
 
   const updateCandidate = useCallback(async (candidate: Candidate) => {
     dispatch({ type: "UPDATE_CANDIDATE", payload: candidate });
@@ -415,10 +466,11 @@ export function AppProvider({
       if (db) db.candidates.put(candidate);
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "update", entity: "candidate", entityId: candidate.id, payload: candidate }).then(() => {
       flushSyncQueue();
     });
-  }, []);
+  }, [notifyOtherTabs]);
 
   const deleteCandidate = useCallback((id: string) => {
     dispatch({ type: "DELETE_CANDIDATE", payload: id });
@@ -431,10 +483,11 @@ export function AppProvider({
       }
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "delete", entity: "candidate", entityId: id, payload: {} }).then(() => {
       flushSyncQueue();
     });
-  }, []);
+  }, [notifyOtherTabs]);
 
   const deleteCandidates = useCallback((ids: string[]) => {
     dispatch({ type: "DELETE_CANDIDATES", payload: ids });
@@ -447,11 +500,12 @@ export function AppProvider({
       }
     });
 
+    notifyOtherTabs();
     // Batch delete is handled individually in sync queue for simplicity
     Promise.all(ids.map(id => enqueueSync({ action: "delete", entity: "candidate", entityId: id, payload: {} }))).then(() => {
       flushSyncQueue();
     });
-  }, []);
+  }, [notifyOtherTabs]);
 
   const importCandidates = useCallback((candidates: Candidate[]) => {
     dispatch({ type: "SET_CANDIDATES", payload: [...candidates, ...state.candidates] });
@@ -462,11 +516,12 @@ export function AppProvider({
       if (db) db.candidates.bulkPut(candidates);
     });
 
+    notifyOtherTabs();
     // To ensure persistence if page is refreshed before server responds:
     Promise.all(candidates.map(c => enqueueSync({ action: "create", entity: "candidate", entityId: c.id, payload: c }))).then(() => {
       flushSyncQueue();
     });
-  }, [state.candidates, addActivity]);
+  }, [state.candidates, addActivity, notifyOtherTabs]);
 
   const addConnection = useCallback((conn: Connection) => {
     // Ensure eventId is present
@@ -479,10 +534,11 @@ export function AppProvider({
       if (db) db.connections.put(connection);
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "create", entity: "connection", entityId: connection.id, payload: connection }).then(() => {
       flushSyncQueue();
     });
-  }, [state.event.id, addActivity]);
+  }, [state.event.id, addActivity, notifyOtherTabs]);
 
   const updateConnection = useCallback((conn: Connection) => {
     const connection = { ...conn, eventId: state.event.id };
@@ -493,10 +549,11 @@ export function AppProvider({
       if (db) db.connections.put(connection);
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "update", entity: "connection", entityId: connection.id, payload: connection }).then(() => {
       flushSyncQueue();
     });
-  }, [state.event.id]);
+  }, [state.event.id, notifyOtherTabs]);
 
   const confirmConnection = useCallback((id: string) => {
     dispatch({ type: "CONFIRM_CONNECTION", payload: id });
@@ -506,10 +563,11 @@ export function AppProvider({
       if (db) db.connections.update(id, { confirmed: true });
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "update", entity: "connection", entityId: id, payload: { confirmed: true } }).then(() => {
       flushSyncQueue();
     });
-  }, []);
+  }, [notifyOtherTabs]);
 
   const deleteConnection = useCallback((id: string) => {
     dispatch({ type: "DELETE_CONNECTION", payload: id });
@@ -519,10 +577,11 @@ export function AppProvider({
       if (db) db.connections.delete(id);
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "delete", entity: "connection", entityId: id, payload: {} }).then(() => {
       flushSyncQueue();
     });
-  }, []);
+  }, [notifyOtherTabs]);
 
   const addGroup = useCallback((group: Group) => {
     dispatch({ type: "ADD_GROUP", payload: group });
@@ -533,10 +592,11 @@ export function AppProvider({
       if (db) db.groups.put(group);
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "create", entity: "group", entityId: group.id, payload: group }).then(() => {
       flushSyncQueue();
     });
-  }, [addActivity]);
+  }, [addActivity, notifyOtherTabs]);
 
   const updateGroup = useCallback((group: Group) => {
     dispatch({ type: "UPDATE_GROUP", payload: group });
@@ -546,10 +606,11 @@ export function AppProvider({
       if (db) db.groups.put(group);
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "update", entity: "group", entityId: group.id, payload: group }).then(() => {
       flushSyncQueue();
     });
-  }, []);
+  }, [notifyOtherTabs]);
 
   const deleteGroup = useCallback((id: string) => {
     dispatch({ type: "DELETE_GROUP", payload: id });
@@ -562,10 +623,11 @@ export function AppProvider({
       }
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "delete", entity: "group", entityId: id, payload: {} }).then(() => {
       flushSyncQueue();
     });
-  }, []);
+  }, [notifyOtherTabs]);
 
   const assignToGroup = useCallback((candidateId: string, groupId: string | null) => {
     dispatch({ type: "ASSIGN_TO_GROUP", payload: { candidateId, groupId } });
@@ -581,10 +643,11 @@ export function AppProvider({
       if (db) db.candidates.update(candidateId, { groupId });
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } }).then(() => {
       flushSyncQueue();
     });
-  }, [state.candidates, state.groups, addActivity]);
+  }, [state.candidates, state.groups, addActivity, notifyOtherTabs]);
 
   const autoDistribute = useCallback(() => {
     const unassigned = state.candidates.filter((c) => !c.groupId);
@@ -604,9 +667,10 @@ export function AppProvider({
 
       enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } });
     });
+    notifyOtherTabs();
     flushSyncQueue();
     addActivity(`Auto-distributed ${assignments.size} candidates`, "group", "assigned");
-  }, [state.candidates, state.groups, adjacency, addActivity]);
+  }, [state.candidates, state.groups, adjacency, addActivity, notifyOtherTabs]);
 
   const clearAllGroups = useCallback(() => {
     state.candidates.forEach((c) => {
@@ -621,8 +685,9 @@ export function AppProvider({
         enqueueSync({ action: "update", entity: "candidate", entityId: c.id, payload: { groupId: null } });
       }
     });
+    notifyOtherTabs();
     flushSyncQueue();
-  }, [state.candidates]);
+  }, [state.candidates, notifyOtherTabs]);
 
   const lockGroup = useCallback((groupId: string, locked: boolean) => {
     dispatch({ type: "LOCK_GROUP", payload: { groupId, locked } });
@@ -632,10 +697,11 @@ export function AppProvider({
       if (db) db.groups.update(groupId, { isLocked: locked });
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "update", entity: "group", entityId: groupId, payload: { isLocked: locked } }).then(() => {
       flushSyncQueue();
     });
-  }, []);
+  }, [notifyOtherTabs]);
 
   const reorderGroups = useCallback((groupIds: string[]) => {
     dispatch({ type: "REORDER_GROUPS", payload: groupIds });
@@ -652,10 +718,11 @@ export function AppProvider({
             payload: { order: index } 
           });
         });
+        notifyOtherTabs();
         flushSyncQueue();
       }
     });
-  }, []);
+  }, [notifyOtherTabs]);
 
   const addRoom = useCallback((room: Room) => {
     dispatch({ type: "ADD_ROOM", payload: room });
@@ -666,10 +733,11 @@ export function AppProvider({
       if (db) db.rooms.put(room);
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "create", entity: "room", entityId: room.id, payload: room }).then(() => {
       flushSyncQueue();
     });
-  }, [addActivity]);
+  }, [addActivity, notifyOtherTabs]);
 
   const updateRoom = useCallback((room: Room) => {
     dispatch({ type: "UPDATE_ROOM", payload: room });
@@ -679,10 +747,11 @@ export function AppProvider({
       if (db) db.rooms.put(room);
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "update", entity: "room", entityId: room.id, payload: room }).then(() => {
       flushSyncQueue();
     });
-  }, []);
+  }, [notifyOtherTabs]);
 
   const deleteRoom = useCallback((id: string) => {
     dispatch({ type: "DELETE_ROOM", payload: id });
@@ -695,10 +764,11 @@ export function AppProvider({
       }
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "delete", entity: "room", entityId: id, payload: {} }).then(() => {
       flushSyncQueue();
     });
-  }, []);
+  }, [notifyOtherTabs]);
 
   const assignToRoom = useCallback((candidateId: string, roomId: string | null) => {
     dispatch({ type: "ASSIGN_TO_ROOM", payload: { candidateId, roomId } });
@@ -714,10 +784,11 @@ export function AppProvider({
       if (db) db.candidates.update(candidateId, { roomId });
     });
 
+    notifyOtherTabs();
     enqueueSync({ action: "update", entity: "candidate", entityId: candidateId, payload: { roomId } }).then(() => {
       flushSyncQueue();
     });
-  }, [state.candidates, state.rooms, addActivity]);
+  }, [state.candidates, state.rooms, addActivity, notifyOtherTabs]);
 
   const value: AppContextValue = {
     ...state,
