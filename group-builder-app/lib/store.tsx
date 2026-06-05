@@ -309,18 +309,23 @@ export function AppProvider({
   );
 
   const addActivity = useCallback((desc: string, entityType = "candidate", action = "updated") => {
+    const activity: Activity = {
+      id: `act-${Date.now()}`,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      action,
+      entityType,
+      entityId: null,
+      description: desc,
+      createdAt: new Date().toISOString(),
+    };
     dispatch({
       type: "ADD_ACTIVITY",
-      payload: {
-        id: `act-${Date.now()}`,
-        userId: currentUser.id,
-        userName: currentUser.name,
-        action,
-        entityType,
-        entityId: null,
-        description: desc,
-        createdAt: new Date().toISOString(),
-      },
+      payload: activity,
+    });
+    // Persist to Dexie
+    import("./dexie").then(({ db }) => {
+      if (db) db.activities.add(activity);
     });
   }, [currentUser]);
 
@@ -333,16 +338,17 @@ export function AppProvider({
     try {
       const { db } = await import("./dexie");
       if (db) {
-        const [cands, grps, rms, conns] = await Promise.all([
+        const [cands, grps, rms, conns, acts] = await Promise.all([
           db.candidates.where("eventId").equals(eventId).toArray(),
-          db.groups.where("eventId").equals(eventId).toArray(),
+          db.groups.where("eventId").equals(eventId).sortBy("order"),
           db.rooms.where("eventId").equals(eventId).toArray(),
-          db.connections.toArray(),
+          db.connections.where("eventId").equals(eventId).toArray(),
+          db.activities.orderBy("createdAt").reverse().limit(50).toArray(),
         ]);
         if (cands.length > 0 || grps.length > 0) {
           dispatch({
             type: "SET_APP_DATA",
-            payload: { candidates: cands, groups: grps, rooms: rms, connections: conns },
+            payload: { candidates: cands, groups: grps, rooms: rms, connections: conns, activities: acts },
           });
         }
       }
@@ -404,22 +410,14 @@ export function AppProvider({
   const updateCandidate = useCallback(async (candidate: Candidate) => {
     dispatch({ type: "UPDATE_CANDIDATE", payload: candidate });
     
-    // 1. Update local table immediately for persistence
+    // Update local table immediately for persistence
     import("./dexie").then(({ db }) => {
       if (db) db.candidates.put(candidate);
     });
 
-    // 2. Immediate API sync for robustness
-    try {
-      await fetch(`/api/candidates/${candidate.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(candidate),
-      });
-    } catch {
-      // If immediate sync fails (e.g. offline), fallback to queue
-      enqueueSync({ action: "update", entity: "candidate", entityId: candidate.id, payload: candidate });
-    }
+    enqueueSync({ action: "update", entity: "candidate", entityId: candidate.id, payload: candidate }).then(() => {
+      flushSyncQueue();
+    });
   }, []);
 
   const deleteCandidate = useCallback((id: string) => {
@@ -471,31 +469,34 @@ export function AppProvider({
   }, [state.candidates, addActivity]);
 
   const addConnection = useCallback((conn: Connection) => {
-    dispatch({ type: "ADD_CONNECTION", payload: conn });
+    // Ensure eventId is present
+    const connection = { ...conn, eventId: state.event.id };
+    dispatch({ type: "ADD_CONNECTION", payload: connection });
     addActivity(`Added connection: ${conn.fromName} ↔ ${conn.toName}`, "connection", "created");
     
     // Update local table immediately
     import("./dexie").then(({ db }) => {
-      if (db) db.connections.put(conn);
+      if (db) db.connections.put(connection);
     });
 
-    enqueueSync({ action: "create", entity: "connection", entityId: conn.id, payload: conn }).then(() => {
+    enqueueSync({ action: "create", entity: "connection", entityId: connection.id, payload: connection }).then(() => {
       flushSyncQueue();
     });
-  }, [addActivity]);
+  }, [state.event.id, addActivity]);
 
   const updateConnection = useCallback((conn: Connection) => {
-    dispatch({ type: "UPDATE_CONNECTION", payload: conn });
+    const connection = { ...conn, eventId: state.event.id };
+    dispatch({ type: "UPDATE_CONNECTION", payload: connection });
     
     // Update local table immediately
     import("./dexie").then(({ db }) => {
-      if (db) db.connections.put(conn);
+      if (db) db.connections.put(connection);
     });
 
-    enqueueSync({ action: "update", entity: "connection", entityId: conn.id, payload: conn }).then(() => {
+    enqueueSync({ action: "update", entity: "connection", entityId: connection.id, payload: connection }).then(() => {
       flushSyncQueue();
     });
-  }, []);
+  }, [state.event.id]);
 
   const confirmConnection = useCallback((id: string) => {
     dispatch({ type: "CONFIRM_CONNECTION", payload: id });
@@ -638,8 +639,22 @@ export function AppProvider({
 
   const reorderGroups = useCallback((groupIds: string[]) => {
     dispatch({ type: "REORDER_GROUPS", payload: groupIds });
-    // Reordering currently doesn't have a specific API field on the Group entity itself,
-    // usually handled by 'index' or 'order' field if present.
+    
+    // Update local table and sync queue
+    import("./dexie").then(({ db }) => {
+      if (db) {
+        groupIds.forEach((id, index) => {
+          db.groups.update(id, { order: index });
+          enqueueSync({ 
+            action: "update", 
+            entity: "group", 
+            entityId: id, 
+            payload: { order: index } 
+          });
+        });
+        flushSyncQueue();
+      }
+    });
   }, []);
 
   const addRoom = useCallback((room: Room) => {

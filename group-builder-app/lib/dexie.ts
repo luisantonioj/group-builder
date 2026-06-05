@@ -54,6 +54,15 @@ class GroupBuilderDB extends Dexie {
       activities: "id, createdAt",
       syncQueue: "++id, entity, timestamp",
     });
+
+    this.version(4).stores({
+      candidates: "id, eventId, groupId, roomId, gender, fullName, isConfirmed",
+      connections: "id, fromId, toId, eventId",
+      groups: "id, eventId, order",
+      rooms: "id, eventId, gender",
+      activities: "id, createdAt",
+      syncQueue: "++id, entity, timestamp",
+    });
   }
 }
 

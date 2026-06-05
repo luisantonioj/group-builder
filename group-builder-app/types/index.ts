@@ -111,6 +111,7 @@ export interface Connection {
   id: string;
   fromId: string;
   toId: string;
+  eventId: string;
   relationshipType: RelationshipType;
   source: ConnectionSource;
   note: string | null;
@@ -128,6 +129,7 @@ export interface Group {
   name: string;
   label: string | null;
   capacity: number;
+  order: number;
   isLocked: boolean;
   eventId: string;
   candidates?: Candidate[];

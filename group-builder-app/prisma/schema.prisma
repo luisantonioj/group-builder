@@ -180,6 +180,7 @@ model Connection {
   id               String           @id @default(cuid())
   fromId           String
   toId             String
+  eventId          String           @default("")
   relationshipType RelationshipType
   source           ConnectionSource
   note             String?
@@ -192,6 +193,7 @@ model Connection {
   @@unique([fromId, toId])  // one edge per direction; check both directions in queries
   @@index([fromId])
   @@index([toId])
+  @@index([eventId])
 }
 
 // ─── Group ────────────────────────────────────────────────────────────────────
@@ -201,6 +203,7 @@ model Group {
   name     String  // e.g. "Kordero 1"
   label    String? // optional alias
   capacity Int     @default(12)
+  order    Int     @default(0)
   isLocked Boolean @default(false)
   eventId  String
 
