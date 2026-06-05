@@ -21,9 +21,14 @@ export async function GET(req: NextRequest) {
 
     const [candidates, groups, rooms, connections] = await Promise.all([
       prisma.candidate.findMany({ where: { ...orgWhere, ...eventFilter }, orderBy: { fullName: "asc" } }),
-      prisma.group.findMany({ where: { ...orgWhere, ...eventFilter } }),
+      prisma.group.findMany({ where: { ...orgWhere, ...eventFilter }, orderBy: { order: "asc" } }),
       prisma.room.findMany({ where: { ...orgWhere, ...eventFilter } }),
-      prisma.connection.findMany({ where: { from: { event: { orgId: session.orgId } } } }),
+      prisma.connection.findMany({ 
+        where: { 
+          eventId: eventId || undefined,
+          from: { event: { orgId: session.orgId } } 
+        } 
+      }),
     ]);
 
     const payload = { candidates, groups, rooms, connections, exportedAt: new Date().toISOString() };

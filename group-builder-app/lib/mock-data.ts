@@ -37,30 +37,30 @@ export const MOCK_CANDIDATES: Candidate[] = [
 
 export const MOCK_CONNECTIONS: Connection[] = [
   // c01 ↔ c47 (siblings: Patricia Santos & Mark Aquino via Dianne)
-  { id: "conn1", fromId: "c01", toId: "c47", relationshipType: "BARKADA", source: "AUTO", confirmed: true, note: "Same inviter chain", createdAt: "2026-04-10T08:12:00Z", fromName: "Santos, Patricia", toName: "Aquino, Mark" },
+  { id: "conn1", fromId: "c01", toId: "c47", eventId: "batch-ye19", relationshipType: "BARKADA", source: "AUTO", confirmed: true, note: "Same inviter chain", createdAt: "2026-04-10T08:12:00Z", fromName: "Santos, Patricia", toName: "Aquino, Mark" },
   // c02 ↔ c04 (classmates DLSL)
-  { id: "conn2", fromId: "c02", toId: "c04", relationshipType: "CLASSMATE", source: "AUTO", confirmed: true, note: "Both invited each other", createdAt: "2026-04-10T08:15:00Z", fromName: "Reyes, Joaquin", toName: "Cruz, Rafael" },
+  { id: "conn2", fromId: "c02", toId: "c04", eventId: "batch-ye19", relationshipType: "CLASSMATE", source: "AUTO", confirmed: true, note: "Both invited each other", createdAt: "2026-04-10T08:15:00Z", fromName: "Reyes, Joaquin", toName: "Cruz, Rafael" },
   // c01 ↔ c03 (classmates DLSL)
-  { id: "conn3", fromId: "c01", toId: "c03", relationshipType: "CLASSMATE", source: "AUTO", confirmed: true, note: "Classmates at DLSL", createdAt: "2026-04-10T08:20:00Z", fromName: "Santos, Patricia", toName: "Torres, Ana Liza" },
+  { id: "conn3", fromId: "c01", toId: "c03", eventId: "batch-ye19", relationshipType: "CLASSMATE", source: "AUTO", confirmed: true, note: "Classmates at DLSL", createdAt: "2026-04-10T08:20:00Z", fromName: "Santos, Patricia", toName: "Torres, Ana Liza" },
   // c01 ↔ c14 (classmates via Patricia's inviter)
-  { id: "conn4", fromId: "c01", toId: "c14", relationshipType: "CLASSMATE", source: "AUTO", confirmed: true, note: "Alexa was invited by Patricia", createdAt: "2026-04-11T10:00:00Z", fromName: "Santos, Patricia", toName: "Soriano, Alexa" },
+  { id: "conn4", fromId: "c01", toId: "c14", eventId: "batch-ye19", relationshipType: "CLASSMATE", source: "AUTO", confirmed: true, note: "Alexa was invited by Patricia", createdAt: "2026-04-11T10:00:00Z", fromName: "Santos, Patricia", toName: "Soriano, Alexa" },
   // c05 ↔ c47 (siblings)
-  { id: "conn5", fromId: "c05", toId: "c47", relationshipType: "SIBLING", source: "MANUAL", confirmed: true, note: "Confirmed siblings", createdAt: "2026-04-10T09:00:00Z", fromName: "Aquino, Dianne", toName: "Aquino, Mark" },
+  { id: "conn5", fromId: "c05", toId: "c47", eventId: "batch-ye19", relationshipType: "SIBLING", source: "MANUAL", confirmed: true, note: "Confirmed siblings", createdAt: "2026-04-10T09:00:00Z", fromName: "Aquino, Dianne", toName: "Aquino, Mark" },
   // c06 ↔ c07 (churchmates, choir)
-  { id: "conn6", fromId: "c06", toId: "c07", relationshipType: "CHURCHMATE", source: "AUTO", confirmed: true, note: "Choir bandmates at BLD Lipa", createdAt: "2026-04-10T09:30:00Z", fromName: "Garcia, Miguel", toName: "Mendoza, Lovely" },
+  { id: "conn6", fromId: "c06", toId: "c07", eventId: "batch-ye19", relationshipType: "CHURCHMATE", source: "AUTO", confirmed: true, note: "Choir bandmates at BLD Lipa", createdAt: "2026-04-10T09:30:00Z", fromName: "Garcia, Miguel", toName: "Mendoza, Lovely" },
   // c08 ↔ c09 (workmates BPO)
-  { id: "conn7", fromId: "c08", toId: "c09", relationshipType: "BARKADA", source: "AUTO", confirmed: true, note: "Colleagues at Accenture", createdAt: "2026-04-10T10:00:00Z", fromName: "Villanueva, Jerome", toName: "Ramos, Cathleen" },
+  { id: "conn7", fromId: "c08", toId: "c09", eventId: "batch-ye19", relationshipType: "BARKADA", source: "AUTO", confirmed: true, note: "Colleagues at Accenture", createdAt: "2026-04-10T10:00:00Z", fromName: "Villanueva, Jerome", toName: "Ramos, Cathleen" },
   // c07 ↔ c11 (Lovely invited Carlo)
-  { id: "conn8", fromId: "c07", toId: "c11", relationshipType: "BARKADA", source: "AUTO", confirmed: true, note: "Carlo invited by Lovely", createdAt: "2026-04-11T08:30:00Z", fromName: "Mendoza, Lovely", toName: "Fernandez, Carlo" },
+  { id: "conn8", fromId: "c07", toId: "c11", eventId: "batch-ye19", relationshipType: "BARKADA", source: "AUTO", confirmed: true, note: "Carlo invited by Lovely", createdAt: "2026-04-11T08:30:00Z", fromName: "Mendoza, Lovely", toName: "Fernandez, Carlo" },
   // c11 ↔ c13 (Carlo invited Ryan)
-  { id: "conn9", fromId: "c11", toId: "c13", relationshipType: "BARKADA", source: "AUTO", confirmed: true, note: "Ryan invited by Carlo", createdAt: "2026-04-11T09:30:00Z", fromName: "Fernandez, Carlo", toName: "Ocampo, Ryan" },
+  { id: "conn9", fromId: "c11", toId: "c13", eventId: "batch-ye19", relationshipType: "BARKADA", source: "AUTO", confirmed: true, note: "Ryan invited by Carlo", createdAt: "2026-04-11T09:30:00Z", fromName: "Fernandez, Carlo", toName: "Ocampo, Ryan" },
 ];
 
 export const MOCK_GROUPS: Group[] = [
-  { id: "g1", name: "Kordero 1", label: null, capacity: 12, isLocked: false, eventId: "batch-ye19", createdAt: "2026-04-15T10:00:00Z", updatedAt: "2026-04-15T10:00:00Z" },
-  { id: "g2", name: "Kordero 2", label: null, capacity: 12, isLocked: false, eventId: "batch-ye19", createdAt: "2026-04-15T10:00:00Z", updatedAt: "2026-04-15T10:00:00Z" },
-  { id: "g3", name: "Kordero 3", label: null, capacity: 12, isLocked: false, eventId: "batch-ye19", createdAt: "2026-04-15T10:00:00Z", updatedAt: "2026-04-15T10:00:00Z" },
-  { id: "g4", name: "Kordero 4", label: null, capacity: 12, isLocked: false, eventId: "batch-ye19", createdAt: "2026-04-15T10:00:00Z", updatedAt: "2026-04-15T10:00:00Z" },
+  { id: "g1", name: "Kordero 1", label: null, capacity: 12, order: 0, isLocked: false, eventId: "batch-ye19", createdAt: "2026-04-15T10:00:00Z", updatedAt: "2026-04-15T10:00:00Z" },
+  { id: "g2", name: "Kordero 2", label: null, capacity: 12, order: 1, isLocked: false, eventId: "batch-ye19", createdAt: "2026-04-15T10:00:00Z", updatedAt: "2026-04-15T10:00:00Z" },
+  { id: "g3", name: "Kordero 3", label: null, capacity: 12, order: 2, isLocked: false, eventId: "batch-ye19", createdAt: "2026-04-15T10:00:00Z", updatedAt: "2026-04-15T10:00:00Z" },
+  { id: "g4", name: "Kordero 4", label: null, capacity: 12, order: 3, isLocked: false, eventId: "batch-ye19", createdAt: "2026-04-15T10:00:00Z", updatedAt: "2026-04-15T10:00:00Z" },
 ];
 
 export const MOCK_ROOMS: Room[] = [

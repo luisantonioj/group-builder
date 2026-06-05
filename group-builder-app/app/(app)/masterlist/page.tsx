@@ -1100,6 +1100,7 @@ function CandidateModal({
   onConfirmConnection: (id: string) => void;
   onDeleteConnection: (id: string) => void;
 }) {
+  const { event: batch } = useApp();
   const [form, setForm] = useState<Candidate>(initial);
   const [tab, setTab] = useState<"details" | "connections" | "shepherd-notes" | "assignment" | "contacts">("details");
 
@@ -1140,6 +1141,7 @@ function CandidateModal({
       id: `manual-${Date.now()}`,
       fromId: initial.id,
       toId: connSelectedId,
+      eventId: batch.id,
       relationshipType: connRelType,
       source: "MANUAL",
       confirmed: true,

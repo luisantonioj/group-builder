@@ -240,6 +240,7 @@ export default function GroupsPage() {
         name: entry.name.trim() || `Group ${i + 1}`,
         label: null,
         capacity: 12,
+        order: i,
         isLocked: false,
         eventId: event.id,
         createdAt: new Date().toISOString(),

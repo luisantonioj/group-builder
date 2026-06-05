@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
         ...(eventId ? { eventId } : {}),
       },
       include: { candidates: { select: { id: true, fullName: true, gender: true } } },
-      orderBy: { name: "asc" },
+      orderBy: { order: "asc" },
     });
     return NextResponse.json({ data: groups });
   } catch {

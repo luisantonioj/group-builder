@@ -14,7 +14,7 @@ type Tab = "graph" | "clusters" | "table";
 type Filter = "all" | "unassigned" | "conflicts";
 
 export default function VisualizerPage() {
-  const { candidates, connections, adjacency, allConflicts, addConnection, updateConnection, deleteConnection } = useApp();
+  const { candidates, connections, adjacency, allConflicts, addConnection, updateConnection, deleteConnection, event } = useApp();
   const { showToast } = useToast();
   const [tab, setTab] = useState<Tab>("graph");
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
@@ -44,6 +44,7 @@ export default function VisualizerPage() {
       id: `conn-${Date.now()}`,
       fromId: from.id,
       toId: to.id,
+      eventId: event.id,
       fromName: from.fullName,
       toName: to.fullName,
       relationshipType: newConn.relationshipType as import("@/types").RelationshipType,
