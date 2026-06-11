@@ -153,6 +153,7 @@ model Candidate {
   shepherdNotesEnc String?  // internal only
 
   isConfirmed      Boolean  @default(false)
+  isPresent        Boolean  @default(false)
 
   // Assignments
   groupId String?

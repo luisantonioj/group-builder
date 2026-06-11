@@ -36,7 +36,7 @@ import type { Candidate, Group, Connection, Conflict } from "@/types";
 
 
 export default function GroupsPage() {
-  const { candidates, connections, groups, adjacency, groupConflicts, assignToGroup, autoDistribute, clearAllGroups, addGroup, deleteGroup, updateGroup, lockGroup, reorderGroups, event } = useApp();
+  const { candidates, connections, groups, adjacency, groupConflicts, assignToGroup, updateCandidate, autoDistribute, clearAllGroups, addGroup, deleteGroup, updateGroup, lockGroup, reorderGroups, event } = useApp();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -373,7 +373,10 @@ export default function GroupsPage() {
                         conflictItems={conflictItems}
                         isFull={isFull}
                         isOver={isOver}
-                        onRemove={(cid) => assignToGroup(cid, null)}
+                        onTogglePresence={(cid, isPresent) => {
+                          const cand = candidates.find((c) => c.id === cid);
+                          if (cand) updateCandidate({ ...cand, isPresent });
+                        }}
                         onEditClick={() => {
                           setEditGroupData(group);
                           setEditGroupOpen(true);
@@ -596,11 +599,11 @@ function DraggableCard({ candidate: c, adjacency }: { candidate: Candidate; adja
 
 // ─── Draggable Member (inside group) ─────────────────────────────────────────
 
-function DraggableMember({ candidate: m, isConflict, isLocked, onRemove }: {
+function DraggableMember({ candidate: m, isConflict, isLocked, onTogglePresence }: {
   candidate: Candidate;
   isConflict: boolean;
   isLocked: boolean;
-  onRemove: () => void;
+  onTogglePresence: (isPresent: boolean) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: m.id });
   return (
@@ -634,16 +637,14 @@ function DraggableMember({ candidate: m, isConflict, isLocked, onRemove }: {
         </div>
       </div>
       {!isLocked && (
-        <button
+        <input
+          type="checkbox"
+          checked={m.isPresent || false}
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2, lineHeight: 1, display: "flex", alignItems: "center", borderRadius: "var(--radius-xs)", flexShrink: 0 }}
-          title="Return to pool"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+          onChange={(e) => onTogglePresence(e.target.checked)}
+          style={{ cursor: "pointer", width: 16, height: 16, flexShrink: 0, margin: "0 4px" }}
+          title={m.isPresent ? "Present" : "Not Yet Present"}
+        />
       )}
     </div>
   );
@@ -706,13 +707,13 @@ interface ConflictItem {
   type: string;
 }
 
-function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onRemove, onEditClick }: {
+function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onTogglePresence, onEditClick }: {
   group: Group;
   members: Candidate[];
   conflictItems: ConflictItem[];
   isFull: boolean;
   isOver: boolean;
-  onRemove: (id: string) => void;
+  onTogglePresence: (id: string, isPresent: boolean) => void;
   onEditClick: () => void;
 }) {
   const {
@@ -798,7 +799,7 @@ function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onRe
             candidate={m}
             isConflict={conflictIds.has(m.id)}
             isLocked={group.isLocked}
-            onRemove={() => onRemove(m.id)}
+            onTogglePresence={(isPresent) => onTogglePresence(m.id, isPresent)}
           />
         ))}
       </div>

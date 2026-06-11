@@ -315,6 +315,7 @@ export default function MasterlistPage() {
       eventId: batch.id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      isPresent: false,
     });
   }
 
@@ -932,6 +933,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
         allergies: getRaw(row, "allergies") || null,
         shepherdNotes: null, 
         isConfirmed,
+        isPresent: false,
         groupId: null, roomId: null,
         eventId: batch.id, createdAt: now, updatedAt: now,
       };

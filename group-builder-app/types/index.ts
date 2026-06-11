@@ -98,6 +98,7 @@ export interface Candidate {
   eventId: string;
   createdAt: string;
   updatedAt: string;
+  isPresent: boolean;
 }
 
 export type CandidateFormData = Omit<

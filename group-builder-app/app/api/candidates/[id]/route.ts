@@ -41,6 +41,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (body.inviterName !== undefined) data.inviterName = body.inviterName;
     if (body.howHeard !== undefined)    data.howHeard = body.howHeard;
     if (body.isConfirmed !== undefined) data.isConfirmed = body.isConfirmed;
+    if (body.isPresent !== undefined)   data.isPresent = body.isPresent;
     if (body.groupId !== undefined)     data.groupId = body.groupId;
     if (body.roomId !== undefined)      data.roomId = body.roomId;
 

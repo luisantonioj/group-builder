@@ -28,6 +28,7 @@ const CreateSchema = z.object({
   allergies: z.string().nullable().optional(),
   shepherdNotes: z.string().nullable().optional(),
   isConfirmed: z.boolean().default(false),
+  isPresent: z.boolean().default(false),
   groupId: z.string().nullable().optional(),
   roomId: z.string().nullable().optional(),
   eventId: z.string(),
