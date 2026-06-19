@@ -28,7 +28,7 @@ import type { Candidate, Room, Gender, RoomGender } from "@/types";
 type GenderTab = "MALE" | "FEMALE";
 
 export default function RoomsPage() {
-  const { candidates, connections, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom, updateRoom, deleteRoom, event } = useApp();
+  const { candidates, connections, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom, updateRoom, deleteRoom, event, updateCandidate } = useApp();
   const { showToast } = useToast();
 
   const [genderTab, setGenderTab] = useState<GenderTab>("MALE");
@@ -276,7 +276,10 @@ export default function RoomsPage() {
                   conflictItems={conflictItems}
                   isOver={overRoomId === room.id}
                   groups={groups}
-                  onRemove={(cid) => assignToRoom(cid, null)}
+                  onTogglePresence={(cid, isPresent) => {
+                    const cand = candidates.find((c) => c.id === cid);
+                    if (cand) updateCandidate({ ...cand, isPresent });
+                  }}
                   onEditClick={() => {
                     setEditRoomData(room);
                     setEditRoomOpen(true);
@@ -449,10 +452,10 @@ function RoomDraggableCard({ candidate: c, groups }: { candidate: Candidate; gro
 
 // ─── Draggable Member (inside room) ──────────────────────────────────────────
 
-function RoomDraggableMember({ candidate: m, isConflict, onRemove, groups }: {
+function RoomDraggableMember({ candidate: m, isConflict, onTogglePresence, groups }: {
   candidate: Candidate;
   isConflict: boolean;
-  onRemove: () => void;
+  onTogglePresence: (isPresent: boolean) => void;
   groups: { id: string; name: string }[];
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: m.id });
@@ -487,16 +490,14 @@ function RoomDraggableMember({ candidate: m, isConflict, onRemove, groups }: {
           {m.age ? `Age ${m.age}` : ""}{groupName ? ` · ${groupName}` : ""}
         </div>
       </div>
-      <button
+      <input
+        type="checkbox"
+        checked={m.isPresent || false}
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => { e.stopPropagation(); onRemove(); }}
-        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: 2, display: "flex", alignItems: "center", flexShrink: 0 }}
-        title="Return to pool"
-      >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
+        onChange={(e) => onTogglePresence(e.target.checked)}
+        style={{ cursor: "pointer", width: 16, height: 16, flexShrink: 0, margin: "0 4px" }}
+        title={m.isPresent ? "Present" : "Not Yet Present"}
+      />
     </div>
   );
 }
@@ -511,13 +512,13 @@ interface RoomConflictItem {
   type: string;
 }
 
-function RoomDropZone({ room, members, conflictItems, isOver, groups, onRemove, onEditClick }: {
+function RoomDropZone({ room, members, conflictItems, isOver, groups, onTogglePresence, onEditClick }: {
   room: Room;
   members: Candidate[];
   conflictItems: RoomConflictItem[];
   isOver: boolean;
   groups: { id: string; name: string }[];
-  onRemove: (id: string) => void;
+  onTogglePresence: (id: string, isPresent: boolean) => void;
   onEditClick: () => void;
 }) {
   const { setNodeRef } = useDroppable({ id: room.id });
@@ -575,7 +576,7 @@ function RoomDropZone({ room, members, conflictItems, isOver, groups, onRemove, 
             candidate={m}
             isConflict={conflictIds.has(m.id)}
             groups={groups}
-            onRemove={() => onRemove(m.id)}
+            onTogglePresence={(isPresent) => onTogglePresence(m.id, isPresent)}
           />
         ))}
       </div>
