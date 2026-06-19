@@ -101,6 +101,7 @@ const API_FIELDS: Record<SyncQueueItem["entity"], string[]> = {
     "allergies",
     "shepherdNotes",
     "isConfirmed",
+    "isPresent",
     "groupId",
     "roomId",
     "eventId",
