@@ -569,11 +569,24 @@ export function AppProvider({
     });
   }, [state.candidates, addActivity, notifyOtherTabs]);
 
+  function canonicalizeConnection(conn: Connection): Connection {
+    if (conn.fromId > conn.toId) {
+      return {
+        ...conn,
+        fromId: conn.toId,
+        toId: conn.fromId,
+        fromName: conn.toName,
+        toName: conn.fromName,
+      };
+    }
+    return conn;
+  }
+
   const addConnection = useCallback((conn: Connection) => {
-    // Ensure eventId is present
-    const connection = { ...conn, eventId: state.event.id };
+    // Ensure eventId is present and sorted
+    const connection = canonicalizeConnection({ ...conn, eventId: state.event.id });
     dispatch({ type: "ADD_CONNECTION", payload: connection });
-    addActivity(`Added connection: ${conn.fromName} ↔ ${conn.toName}`, "connection", "created");
+    addActivity(`Added connection: ${connection.fromName} ↔ ${connection.toName}`, "connection", "created");
     
     persistOfflineWrite(
       () => db!.connections.put(connection).then(() => undefined),
@@ -585,7 +598,7 @@ export function AppProvider({
   }, [state.event.id, addActivity, notifyOtherTabs]);
 
   const updateConnection = useCallback((conn: Connection) => {
-    const connection = { ...conn, eventId: state.event.id };
+    const connection = canonicalizeConnection({ ...conn, eventId: state.event.id });
     dispatch({ type: "UPDATE_CONNECTION", payload: connection });
     
     persistOfflineWrite(

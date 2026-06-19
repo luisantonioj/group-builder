@@ -1,5 +1,7 @@
+import Fuse from "fuse.js";
 import type { Candidate, Connection, Conflict } from "@/types";
 import { fuzzyMatchInviter, groupBySharedInviter } from "./fuzzy-match";
+
 
 // Build an adjacency map from a connection list for O(1) lookup.
 // Only confirmed connections count as real edges for conflict detection.
@@ -136,11 +138,33 @@ export function deriveAutoConnections(candidates: Candidate[]): Connection[] {
   const result: Connection[] = [];
   const seen = new Set<string>();
 
+  if (candidates.length === 0) return result;
+
+  const fuse = new Fuse(candidates, {
+    keys: ["fullName", "firstName", "lastName"],
+    includeScore: true,
+    threshold: 0.4,
+    ignoreLocation: true,
+  });
+
   for (const candidate of candidates) {
     if (!candidate.inviterName) continue;
-    const others = candidates.filter((c) => c.id !== candidate.id);
-    const match = fuzzyMatchInviter(candidate.inviterName, others, 0.4);
+
+    const match = fuzzyMatchInviter(candidate.inviterName, fuse, 0.4);
     if (!match) continue;
+
+    // Filter out self-matches
+    if (match.candidate.id === candidate.id) {
+      // Find the second best match if the first was self
+      const results = fuse.search(candidate.inviterName);
+      const secondBest = results.find((r) => r.item.id !== candidate.id);
+      if (secondBest && secondBest.score !== undefined && (1 - secondBest.score) >= 0.4) {
+        match.candidate = secondBest.item;
+        match.score = 1 - secondBest.score;
+      } else {
+        continue;
+      }
+    }
 
     const [a, b] = [candidate.id, match.candidate.id].sort();
     const key = `${a}:${b}`;
@@ -149,16 +173,16 @@ export function deriveAutoConnections(candidates: Candidate[]): Connection[] {
 
     result.push({
       id: `auto-${a}-${b}`,
-      fromId: candidate.id,
-      toId: match.candidate.id,
+      fromId: a,
+      toId: b,
       eventId: candidate.eventId,
       relationshipType: "BARKADA",
       source: "AUTO",
       note: `Invited by "${candidate.inviterName}"`,
       confirmed: true,
       createdAt: candidate.createdAt,
-      fromName: candidate.fullName,
-      toName: match.candidate.fullName,
+      fromName: a === candidate.id ? candidate.fullName : match.candidate.fullName,
+      toName: b === candidate.id ? candidate.fullName : match.candidate.fullName,
     });
   }
 
@@ -193,16 +217,16 @@ export function deriveCoInviteeConnections(candidates: Candidate[]): Connection[
 
         result.push({
           id: `co-invitee-${a}-${b}`,
-          fromId: group[i].id,
-          toId: group[j].id,
+          fromId: a,
+          toId: b,
           eventId: group[i].eventId,
           relationshipType: "CHURCHMATE",
           source: "AUTO",
           note: `Shared inviter: "${canonicalName}"`,
           confirmed,
           createdAt: group[i].createdAt,
-          fromName: group[i].fullName,
-          toName: group[j].fullName,
+          fromName: a === group[i].id ? group[i].fullName : group[j].fullName,
+          toName: b === group[i].id ? group[i].fullName : group[j].fullName,
         });
       }
     }

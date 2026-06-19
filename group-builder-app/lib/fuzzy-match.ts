@@ -6,23 +6,28 @@ export interface MatchResult {
   score: number;
 }
 
-// Fuzzy-match an inviter name string against a list of existing candidates.
+// Fuzzy-match an inviter name string against a list of existing candidates or a pre-configured Fuse index.
 // Returns the best match above the threshold, or null if none found.
 export function fuzzyMatchInviter(
   inviterName: string,
-  candidates: Candidate[],
+  candidatesOrFuse: Candidate[] | Fuse<Candidate>,
   threshold = 0.4
 ): MatchResult | null {
   if (!inviterName || inviterName.trim().toLowerCase() === "n/a") return null;
 
-  const fuse = new Fuse(candidates, {
-    keys: ["fullName", "firstName", "lastName"],
-    includeScore: true,
-    threshold,
-    ignoreLocation: true,
-  });
+  let results;
+  if (candidatesOrFuse instanceof Fuse) {
+    results = candidatesOrFuse.search(inviterName);
+  } else {
+    const fuse = new Fuse(candidatesOrFuse, {
+      keys: ["fullName", "firstName", "lastName"],
+      includeScore: true,
+      threshold,
+      ignoreLocation: true,
+    });
+    results = fuse.search(inviterName);
+  }
 
-  const results = fuse.search(inviterName);
   if (results.length === 0) return null;
 
   const best = results[0];
@@ -39,6 +44,7 @@ export function normalizeName(name: string): string {
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "") // strip diacritics
     .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
     .trim();
 }
 

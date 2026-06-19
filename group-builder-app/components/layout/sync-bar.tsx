@@ -1,16 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 export default function SyncBar() {
   const [online, setOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
 
-  async function refreshPendingCount() {
+  async function refreshCounts() {
     try {
       const { db } = await import("@/lib/dexie");
       if (db) {
-        setPendingCount(await db.syncQueue.count());
+        const queue = await db.syncQueue.toArray();
+        const pending = queue.filter((item) => item.status !== "FAILED").length;
+        const failed = queue.filter((item) => item.status === "FAILED").length;
+        setPendingCount(pending);
+        setFailedCount(failed);
       }
     } catch {
       // IndexedDB unavailable — ignore
@@ -23,11 +29,16 @@ export default function SyncBar() {
       try {
         const { db, flushSyncQueue } = await import("@/lib/dexie");
         if (db) {
-          const count = await db.syncQueue.count();
-          setPendingCount(count);
-          if (count > 0 && navigator.onLine) {
+          const queue = await db.syncQueue.toArray();
+          const pending = queue.filter((item) => item.status !== "FAILED").length;
+          const failed = queue.filter((item) => item.status === "FAILED").length;
+          setPendingCount(pending);
+          setFailedCount(failed);
+          if (pending > 0 && navigator.onLine) {
             setSyncing(true);
-            await flushSyncQueue((remaining) => setPendingCount(remaining));
+            await flushSyncQueue(() => {
+              refreshCounts();
+            });
             setSyncing(false);
           }
         }
@@ -42,7 +53,7 @@ export default function SyncBar() {
     const channel = new BroadcastChannel("group-builder-sync");
     channel.onmessage = (event) => {
       if (event.data.type === "SYNC_QUEUE_CHANGED" || event.data.type === "REFRESH_DATA") {
-        refreshPendingCount();
+        refreshCounts();
       }
     };
     return () => channel.close();
@@ -57,7 +68,9 @@ export default function SyncBar() {
       setSyncing(true);
       try {
         const { flushSyncQueue } = await import("@/lib/dexie");
-        await flushSyncQueue((remaining) => setPendingCount(remaining));
+        await flushSyncQueue(() => {
+          refreshCounts();
+        });
       } catch {
         // Network flush failed — will retry on next reconnect
       }
@@ -85,6 +98,8 @@ export default function SyncBar() {
           borderRadius: "50%",
           background: syncing
             ? "var(--color-warning)"
+            : failedCount > 0
+            ? "var(--color-danger)"
             : online
             ? "var(--color-success)"
             : "var(--color-danger)",
@@ -99,8 +114,39 @@ export default function SyncBar() {
           : online
           ? pendingCount > 0
             ? `${pendingCount} change${pendingCount !== 1 ? "s" : ""} pending sync`
+            : failedCount > 0
+            ? `${failedCount} sync error${failedCount !== 1 ? "s" : ""} detected`
             : "Online"
           : "Offline — changes will sync when reconnected"}
+        {failedCount > 0 && !syncing && (
+          <button
+            onClick={async () => {
+              try {
+                const { db, flushSyncQueue } = await import("@/lib/dexie");
+                if (db) {
+                  const failedItems = await db.syncQueue.toArray();
+                  for (const item of failedItems) {
+                    if (item.status === "FAILED" && item.id != null) {
+                      await db.syncQueue.update(item.id, { status: undefined, retries: 0 });
+                    }
+                  }
+                  await refreshCounts();
+                  if (navigator.onLine) {
+                    setSyncing(true);
+                    await flushSyncQueue(() => {
+                      refreshCounts();
+                    });
+                    setSyncing(false);
+                  }
+                }
+              } catch (e) {}
+            }}
+            className="btn btn-xs btn-secondary"
+            style={{ marginLeft: "var(--space-md)", padding: "1px 6px", fontSize: "10px" }}
+          >
+            Retry Failed
+          </button>
+        )}
       </span>
     </div>
   );

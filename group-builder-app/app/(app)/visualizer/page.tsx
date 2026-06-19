@@ -83,10 +83,12 @@ export default function VisualizerPage() {
     return conflictEdgeSet.has(`${a}:${b}`);
   }
 
-  // Layout: clusters in a grid, singletons along the bottom
-  const nodePositions = useMemo(() => {
+  // Layout: clusters in a grid, singletons along the bottom (dynamic height calculation)
+  const { canvasHeight, nodePositions } = useMemo(() => {
     const positions = new Map<string, { x: number; y: number }>();
-    const H = 560;
+    
+    const numClusterRows = Math.ceil(clusters.length / 5);
+    const clusterSectionHeight = numClusterRows > 0 ? numClusterRows * 165 : 80;
 
     clusters.forEach((cluster, ci) => {
       const cx = 90 + (ci % 5) * 175;
@@ -103,14 +105,20 @@ export default function VisualizerPage() {
 
     const clusterIds = new Set(clusters.flatMap((c) => c.map((m) => m.id)));
     const singletons = candidates.filter((c) => !clusterIds.has(c.id));
+
+    const singletonStartY = 20 + clusterSectionHeight;
+    const numSingletonRows = Math.ceil(singletons.length / 14);
+    const singletonSectionHeight = Math.max(80, numSingletonRows * 55);
+    const totalHeight = Math.max(560, singletonStartY + singletonSectionHeight + 40);
+
     singletons.forEach((c, i) => {
       positions.set(c.id, {
         x: 30 + (i % 14) * 63,
-        y: H - 80 - Math.floor(i / 14) * 55,
+        y: singletonStartY + Math.floor(i / 14) * 55,
       });
     });
 
-    return positions;
+    return { canvasHeight: totalHeight, nodePositions: positions };
   }, [candidates, clusters]);
 
   const visibleCandidates = useMemo(() => {
@@ -205,7 +213,7 @@ export default function VisualizerPage() {
             <div style={{ overflow: "hidden" }}>
               <svg
                 width="100%"
-                viewBox="0 0 920 560"
+                viewBox={`0 0 920 ${canvasHeight}`}
                 style={{ display: "block", background: "var(--bg-page)" }}
                 preserveAspectRatio="xMidYMid meet"
               >

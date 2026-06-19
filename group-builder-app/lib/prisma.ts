@@ -58,34 +58,69 @@ function decryptCandidateFields(record: Record<string, unknown>) {
   return out;
 }
 
-// Extend PrismaClient with middleware for transparent encryption
-basePrisma.$use(async (params, next) => {
-  if (params.model === "Candidate") {
-    if (
-      params.action === "create" ||
-      params.action === "update" ||
-      params.action === "upsert"
-    ) {
-      if (params.args.data) {
-        params.args.data = encryptCandidateFields(params.args.data);
-      }
-    }
-  }
-
-  const result = await next(params);
-
-  if (params.model === "Candidate") {
-    if (Array.isArray(result)) {
-      return result.map((r) =>
-        decryptCandidateFields(r as Record<string, unknown>)
-      );
-    }
-    if (result && typeof result === "object") {
-      return decryptCandidateFields(result as Record<string, unknown>);
-    }
-  }
-
-  return result;
+// Extend PrismaClient with extensions for transparent encryption
+const extendedPrisma = basePrisma.$extends({
+  query: {
+    candidate: {
+      async create({ args, query }) {
+        if (args.data) {
+          args.data = encryptCandidateFields(args.data as Record<string, unknown>) as any;
+        }
+        const result = await query(args);
+        return decryptCandidateFields(result as Record<string, unknown>) as any;
+      },
+      async createMany({ args, query }) {
+        if (Array.isArray(args.data)) {
+          args.data = args.data.map((d) => encryptCandidateFields(d as Record<string, unknown>)) as any;
+        } else if (args.data) {
+          args.data = encryptCandidateFields(args.data as Record<string, unknown>) as any;
+        }
+        return query(args);
+      },
+      async update({ args, query }) {
+        if (args.data) {
+          args.data = encryptCandidateFields(args.data as Record<string, unknown>) as any;
+        }
+        const result = await query(args);
+        return decryptCandidateFields(result as Record<string, unknown>) as any;
+      },
+      async updateMany({ args, query }) {
+        if (args.data) {
+          args.data = encryptCandidateFields(args.data as Record<string, unknown>) as any;
+        }
+        return query(args);
+      },
+      async upsert({ args, query }) {
+        if (args.create) {
+          args.create = encryptCandidateFields(args.create as Record<string, unknown>) as any;
+        }
+        if (args.update) {
+          args.update = encryptCandidateFields(args.update as Record<string, unknown>) as any;
+        }
+        const result = await query(args);
+        return decryptCandidateFields(result as Record<string, unknown>) as any;
+      },
+      async delete({ args, query }) {
+        const result = await query(args);
+        return result ? decryptCandidateFields(result as Record<string, unknown>) as any : null;
+      },
+      async findMany({ args, query }) {
+        const result = await query(args);
+        return (result as Record<string, unknown>[]).map((r) =>
+          decryptCandidateFields(r)
+        ) as any;
+      },
+      async findFirst({ args, query }) {
+        const result = await query(args);
+        return result ? decryptCandidateFields(result as Record<string, unknown>) as any : null;
+      },
+      async findUnique({ args, query }) {
+        const result = await query(args);
+        return result ? decryptCandidateFields(result as Record<string, unknown>) as any : null;
+      },
+    },
+  },
 });
 
-export const prisma = basePrisma;
+export const prisma = extendedPrisma as unknown as PrismaClient;
+

@@ -15,6 +15,8 @@ export interface SyncQueueItem {
   payload: unknown;
   timestamp: number;
   retries: number;
+  status?: "PENDING" | "FAILED";
+  errorMessage?: string;
 }
 
 class GroupBuilderDB extends Dexie {
@@ -145,9 +147,10 @@ export async function flushSyncQueue(onProgress?: (pending: number) => void) {
   isFlushing = true;
   try {
     const queue = await db.syncQueue.orderBy("timestamp").toArray();
-    onProgress?.(queue.length);
+    const pendingQueue = queue.filter((item) => item.status !== "FAILED");
+    onProgress?.(pendingQueue.length);
 
-    for (const item of queue) {
+    for (const item of pendingQueue) {
       try {
         const method = item.action === "delete" ? "DELETE" : item.action === "create" ? "POST" : "PUT";
         const url = `/api/${item.entity}s/${item.action !== "create" ? item.entityId : ""}`;
@@ -167,11 +170,26 @@ export async function flushSyncQueue(onProgress?: (pending: number) => void) {
           const isTransient = res.status >= 500 || res.status === 429;
           const maxRetries = isTransient ? 10 : 3;
 
-          if (item.retries >= maxRetries && item.id != null) {
-            // Only give up and delete if it's a non-transient error or we've exhausted retries
-            await db.syncQueue.delete(item.id);
-          } else if (item.id != null) {
-            await db.syncQueue.update(item.id, { retries: item.retries + 1 });
+          let errorMsg = `Server returned status ${res.status}`;
+          try {
+            const errData = await res.json();
+            if (errData && errData.error) {
+              errorMsg = typeof errData.error === "string" ? errData.error : JSON.stringify(errData.error);
+            }
+          } catch {
+            // ignore JSON parsing errors
+          }
+
+          if (item.id != null) {
+            if (item.retries >= maxRetries || !isTransient) {
+              // Mark as FAILED with error message instead of silently deleting
+              await db.syncQueue.update(item.id, {
+                status: "FAILED",
+                errorMessage: errorMsg,
+              });
+            } else {
+              await db.syncQueue.update(item.id, { retries: item.retries + 1 });
+            }
           }
         }
       } catch {
@@ -179,7 +197,8 @@ export async function flushSyncQueue(onProgress?: (pending: number) => void) {
       }
     }
 
-    const remaining = await db.syncQueue.count();
+    const remainingQueue = await db.syncQueue.toArray();
+    const remaining = remainingQueue.filter((item) => item.status !== "FAILED").length;
     onProgress?.(remaining);
     notifySyncQueueChanged();
   } finally {

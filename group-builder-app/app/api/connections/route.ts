@@ -39,7 +39,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Candidate not found" }, { status: 404 });
     }
 
-    const conn = await prisma.connection.create({ data: body });
+    const [fromId, toId] = [body.fromId, body.toId].sort();
+
+    // Check for existing connection in canonical order
+    const existing = await prisma.connection.findFirst({
+      where: { fromId, toId },
+    });
+    if (existing) {
+      return NextResponse.json({ data: existing }, { status: 200 });
+    }
+
+    const conn = await prisma.connection.create({
+      data: {
+        ...body,
+        fromId,
+        toId,
+      },
+    });
     return NextResponse.json({ data: conn }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to create connection" }, { status: 500 });

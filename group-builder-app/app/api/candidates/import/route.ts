@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { hmac, encrypt } from "@/lib/crypto";
 import { fuzzyMatchInviter } from "@/lib/fuzzy-match";
 import { deriveCoInviteeConnections } from "@/lib/conflict-detection";
+import Fuse from "fuse.js";
 import type { ImportRow, ColumnMapping, Candidate } from "@/types";
 
 const MAX_ROWS = 500;
@@ -40,6 +41,13 @@ export async function POST(req: NextRequest) {
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
 
   const existingCandidates = await prisma.candidate.findMany({ where: { eventId } });
+  const fuse = new Fuse(existingCandidates as unknown as Candidate[], {
+    keys: ["fullName", "firstName", "lastName"],
+    includeScore: true,
+    threshold: 0.4,
+    ignoreLocation: true,
+  });
+
   const results = { created: 0, skipped: 0, duplicates: [] as string[] };
 
   for (const row of rows) {
@@ -98,9 +106,14 @@ export async function POST(req: NextRequest) {
         },
       });
 
+      // Add to local list and Fuse search index for matching later rows
+      existingCandidates.push(candidate as any);
+      fuse.add(candidate as any);
+
       if (inviterRaw && inviterRaw.toLowerCase() !== "n/a") {
-        const match = fuzzyMatchInviter(inviterRaw, existingCandidates as unknown as Parameters<typeof fuzzyMatchInviter>[1]);
-        if (match && match.score > 0.6) {
+        const match = fuzzyMatchInviter(inviterRaw, fuse);
+        // Exclude matching self
+        if (match && match.candidate.id !== candidate.id && match.score > 0.6) {
           await prisma.connection.upsert({
             where: { fromId_toId: { fromId: candidate.id, toId: match.candidate.id } },
             update: {},
