@@ -57,7 +57,14 @@ export async function GET(req: NextRequest) {
       }),
       prisma.candidate.count({ where }),
     ]);
-    return NextResponse.json({ data: candidates, total, page, pageSize });
+    return NextResponse.json(
+      { data: candidates, total, page, pageSize },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0, must-revalidate",
+        },
+      }
+    );
   } catch {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }

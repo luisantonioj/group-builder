@@ -12,7 +12,14 @@ export async function GET(req: NextRequest) {
       include: { _count: { select: { candidates: true } } },
       orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json({ data: events });
+    return NextResponse.json(
+      { data: events },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0, must-revalidate",
+        },
+      }
+    );
   } catch {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }

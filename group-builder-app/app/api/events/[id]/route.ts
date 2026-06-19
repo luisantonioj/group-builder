@@ -11,7 +11,14 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       where: { id: params.id, orgId: session.orgId },
     });
     if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json({ data: event });
+    return NextResponse.json(
+      { data: event },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0, must-revalidate",
+        },
+      }
+    );
   } catch {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }

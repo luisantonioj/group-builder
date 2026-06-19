@@ -429,10 +429,10 @@ export function AppProvider({
     // 2. Then, fetch from the server to ensure we have the latest data
     try {
       const [candidatesRes, groupsRes, roomsRes, connectionsRes] = await Promise.allSettled([
-        fetch(`/api/candidates?eventId=${eventId}`).then((r) => r.json()),
-        fetch(`/api/groups?eventId=${eventId}`).then((r) => r.json()),
-        fetch(`/api/rooms?eventId=${eventId}`).then((r) => r.json()),
-        fetch(`/api/connections?eventId=${eventId}`).then((r) => r.json()),
+        fetch(`/api/candidates?eventId=${eventId}`, { cache: "no-store" }).then((r) => r.json()),
+        fetch(`/api/groups?eventId=${eventId}`, { cache: "no-store" }).then((r) => r.json()),
+        fetch(`/api/rooms?eventId=${eventId}`, { cache: "no-store" }).then((r) => r.json()),
+        fetch(`/api/connections?eventId=${eventId}`, { cache: "no-store" }).then((r) => r.json()),
       ]);
 
       const newData: Partial<AppState> = {};

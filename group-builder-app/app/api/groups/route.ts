@@ -16,7 +16,14 @@ export async function GET(req: NextRequest) {
       include: { candidates: { select: { id: true, fullName: true, gender: true } } },
       orderBy: { order: "asc" },
     });
-    return NextResponse.json({ data: groups });
+    return NextResponse.json(
+      { data: groups },
+      {
+        headers: {
+          "Cache-Control": "no-store, max-age=0, must-revalidate",
+        },
+      }
+    );
   } catch {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
