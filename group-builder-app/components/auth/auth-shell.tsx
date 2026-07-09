@@ -17,15 +17,15 @@ type AuthShellProps = {
 };
 
 const pageCopy: Record<AuthVariant, {
-  badge: string;
+  // badge: string;
   title: string;
   description: string;
   illustration: "dashboard" | "organization" | "join";
   benefits: Array<{ icon: ReactNode; title: string; text: string }>;
 }> = {
   login: {
-    badge: "Trusted by ministries and organizations",
-    title: "Smart Grouping. Stronger Connections.",
+    // badge: "Trusted by ministries and organizations",
+    title: "Smart Grouping",
     description:
       "Automate candidate organization, form balanced groups, assign rooms, and stay conflict-free in one system.",
     illustration: "dashboard",
@@ -36,7 +36,7 @@ const pageCopy: Record<AuthVariant, {
     ],
   },
   register: {
-    badge: "New organization setup",
+    // badge: "New organization setup",
     title: "Create your organization",
     description: "Set up your organization and start building better groups.",
     illustration: "organization",
@@ -47,7 +47,7 @@ const pageCopy: Record<AuthVariant, {
     ],
   },
   join: {
-    badge: "Request access",
+    // badge: "Request access",
     title: "Join an organization",
     description: "Enter your organization's slug to request access and start collaborating with your team.",
     illustration: "join",
@@ -66,13 +66,13 @@ export function AuthShell({ variant, children }: AuthShellProps) {
     <main className={`auth-page auth-page-${variant}`}>
       <div className="auth-frame">
         <section className="auth-brand-panel" aria-label="Group Builder">
-          <BrandLockup />
+          {/* <BrandLockup /> */}
 
           <div className="auth-hero">
-            <div className="auth-trust-pill">
+            {/* <div className="auth-trust-pill">
               <Sparkles size={14} />
               <span>{copy.badge}</span>
-            </div>
+            </div> */}
             <h1>{copy.title}</h1>
             <p>{copy.description}</p>
           </div>
@@ -90,12 +90,6 @@ export function AuthShell({ variant, children }: AuthShellProps) {
               </div>
             ))}
           </div>
-
-          <footer className="auth-footer">
-            <span>(c) 2025 Group Builder. All rights reserved.</span>
-            <span>Privacy Policy</span>
-            <span>Terms of Service</span>
-          </footer>
         </section>
 
         <section className="auth-form-panel">
