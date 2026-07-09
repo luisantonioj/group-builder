@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ArrowRight, Building2, Lock, Mail, UserRound } from "lucide-react";
+import { AuthLogo, AuthShell } from "@/components/auth/auth-shell";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -45,155 +47,123 @@ export default function RegisterPage() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "var(--bg-sidebar)",
-        padding: "var(--space-lg)",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: "420px",
-          background: "var(--bg-card)",
-          borderRadius: "var(--radius-xl)",
-          boxShadow: "var(--shadow-modal)",
-          padding: "var(--space-2xl)",
-        }}
-      >
-        <div style={{ textAlign: "center", marginBottom: "var(--space-xl)" }}>
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 56,
-              height: 56,
-              borderRadius: "var(--radius-lg)",
-              background: "var(--color-primary)",
-              marginBottom: "var(--space-md)",
-            }}
-          >
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-          </div>
-          <h1 style={{ fontSize: "var(--font-size-xl)", fontWeight: "var(--font-weight-bold)", color: "var(--text-primary)" }}>
-            Register Organization
-          </h1>
-          <p style={{ fontSize: "var(--font-size-sm)", color: "var(--text-muted)", marginTop: 4 }}>
-            Group Builder · New Organization Setup
-          </p>
+    <AuthShell variant="register">
+      <div className="auth-card">
+        <div className="auth-card-header">
+          <AuthLogo />
+          <h2 className="auth-card-title">Register Organization</h2>
+          <p className="auth-card-subtitle">Group Builder / New Organization Setup</p>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+        <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
             <label className="form-label" htmlFor="orgName">Organization Name</label>
-            <input
-              id="orgName"
-              type="text"
-              className="input"
-              value={orgName}
-              onChange={(e) => setOrgName(e.target.value)}
-              placeholder="e.g. My Youth Ministry"
-              required
-              autoFocus
-            />
+            <div className="auth-field-with-icon">
+              <Building2 className="auth-input-icon" size={20} />
+              <input
+                id="orgName"
+                type="text"
+                className="input"
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                placeholder="e.g. My Youth Ministry"
+                required
+                autoFocus
+              />
+            </div>
           </div>
 
           <div className="form-group">
             <label className="form-label" htmlFor="name">Your Name</label>
-            <input
-              id="name"
-              type="text"
-              className="input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Juan dela Cruz"
-              required
-            />
+            <div className="auth-field-with-icon">
+              <UserRound className="auth-input-icon" size={20} />
+              <input
+                id="name"
+                type="text"
+                className="input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Juan dela Cruz"
+                required
+              />
+            </div>
           </div>
 
           <div className="form-group">
             <label className="form-label" htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@yourorg.com"
-              required
-            />
+            <div className="auth-field-with-icon">
+              <Mail className="auth-input-icon" size={20} />
+              <input
+                id="email"
+                type="email"
+                className="input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@yourorg.com"
+                required
+              />
+            </div>
           </div>
 
           <div className="form-group">
             <label className="form-label" htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Minimum 8 characters"
-              required
-            />
+            <div className="auth-field-with-icon">
+              <Lock className="auth-input-icon" size={20} />
+              <input
+                id="password"
+                type="password"
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Minimum 8 characters"
+                required
+              />
+            </div>
           </div>
 
           <div className="form-group">
             <label className="form-label" htmlFor="confirm">Confirm Password</label>
-            <input
-              id="confirm"
-              type="password"
-              className="input"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
+            <div className="auth-field-with-icon">
+              <Lock className="auth-input-icon" size={20} />
+              <input
+                id="confirm"
+                type="password"
+                className="input"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="Minimum 8 characters"
+                required
+              />
+            </div>
           </div>
 
           {error && (
-            <p
-              style={{
-                fontSize: "var(--font-size-sm)",
-                color: "var(--color-danger)",
-                background: "var(--color-conflict-bg)",
-                border: "1px solid var(--color-conflict-border)",
-                borderRadius: "var(--radius-sm)",
-                padding: "var(--space-sm) var(--space-md)",
-              }}
-            >
+            <p className="auth-alert auth-alert-error">
               {error}
             </p>
           )}
 
           <button
             type="submit"
-            className="btn btn-primary"
+            className="btn btn-primary auth-submit"
             disabled={loading}
-            style={{ width: "100%", justifyContent: "center", padding: "10px 14px" }}
           >
-            {loading ? "Registering…" : "Register Organization"}
+            {loading ? "Registering..." : "Register Organization"}
+            {!loading && <ArrowRight size={18} />}
           </button>
         </form>
 
-        <p style={{ marginTop: "var(--space-lg)", fontSize: "var(--font-size-sm)", color: "var(--text-muted)", textAlign: "center" }}>
-          Already have an account?{" "}
-          <Link href="/login" style={{ color: "var(--color-primary)" }}>Sign in</Link>
-        </p>
-        <p style={{ marginTop: "var(--space-sm)", fontSize: "var(--font-size-sm)", color: "var(--text-muted)", textAlign: "center" }}>
-          Joining an existing organization?{" "}
-          <Link href="/join" style={{ color: "var(--color-primary)" }}>Join here</Link>
-        </p>
+        <div className="auth-link-stack">
+          <p>
+            Already have an account?{" "}
+            <Link href="/login">Sign in</Link>
+          </p>
+          <p>
+            Joining an existing organization?{" "}
+            <Link href="/join">Join here</Link>
+          </p>
+        </div>
       </div>
-    </div>
+    </AuthShell>
   );
 }
