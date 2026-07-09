@@ -21,3 +21,11 @@ Notes:
 - [x] Preserve stacked behavior for tablet/mobile widths without horizontal overflow.
 - [x] Force the auth form card to remain a clean white surface even when global auto dark mode is active.
 - [x] Browser-check Login, Register Organization, and Join Organization at desktop and compact desktop sizes.
+
+## 60/40 Auth Split Refinement
+
+- [x] Convert auth pages to a true 60% dark branded panel and 40% full-height white form panel.
+- [x] Remove the outer framed-container and floating-card visual treatment.
+- [x] Restore visible branded logo content on the left panel and remove commented-out badge UI.
+- [x] Keep all existing fields, links, buttons, routes, validation, API calls, and auth logic unchanged.
+- [x] Verify desktop 60/40 ratio, full-height panels, no horizontal overflow, and responsive stacking.
