@@ -61,8 +61,6 @@ export function AuthShell({ variant, children }: AuthShellProps) {
     <main className={`auth-page auth-page-${variant}`}>
       <div className="auth-frame">
         <section className="auth-brand-panel" aria-label="Group Builder">
-          <BrandLockup />
-
           <div className="auth-hero">
             <h1>{copy.title}</h1>
             <p>{copy.description}</p>
@@ -93,21 +91,11 @@ export function AuthShell({ variant, children }: AuthShellProps) {
 
 export function AuthLogo() {
   return (
-    <span className="auth-logo" aria-hidden="true">
-      <UsersRound size={30} strokeWidth={2.2} />
-    </span>
-  );
-}
-
-function BrandLockup() {
-  return (
-    <div className="auth-brand-lockup">
-      <AuthLogo />
-      <span>
-        <strong>Group Builder</strong>
-        <small>Shepherd&apos;s Grouping System</small>
-      </span>
-    </div>
+    <img
+      className="auth-logo"
+      src="/Group%20Builder%20Logo.png"
+      alt="Group Builder"
+    />
   );
 }
 

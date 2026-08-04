@@ -29,3 +29,16 @@ Notes:
 - [x] Restore visible branded logo content on the left panel and remove commented-out badge UI.
 - [x] Keep all existing fields, links, buttons, routes, validation, API calls, and auth logic unchanged.
 - [x] Verify desktop 60/40 ratio, full-height panels, no horizontal overflow, and responsive stacking.
+
+## Auth Logo Asset Update
+
+- [x] Replace the generated auth logo icon with `public/Group Builder Logo.png`.
+- [x] Apply the public logo to the left brand panel and form header on Login, Register Organization, and Join Organization.
+- [x] Remove old blue-square auth logo styling and stale lockup text CSS.
+- [x] Browser-check that the public logo loads on all auth pages and no old auth logo SVG remains.
+
+## Auth Left Panel Logo Removal
+
+- [x] Remove the upper-left logo from the dark brand panel on all auth pages.
+- [x] Keep the form header logo intact.
+- [x] Remove stale `.auth-brand-lockup` styling.

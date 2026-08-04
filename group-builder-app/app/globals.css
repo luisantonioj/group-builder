@@ -786,7 +786,6 @@ tbody td {
   bottom: -104px;
 }
 
-.auth-brand-lockup,
 .auth-hero,
 .auth-illustration,
 .auth-benefits {
@@ -804,41 +803,11 @@ tbody td {
   color: #0f172a;
 }
 
-.auth-brand-lockup {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-}
-
-.auth-brand-lockup strong,
-.auth-brand-lockup small {
-  display: block;
-}
-
-.auth-brand-lockup strong {
-  color: #ffffff;
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
-  line-height: 1.1;
-}
-
-.auth-brand-lockup small {
-  color: rgba(226, 232, 240, 0.82);
-  font-size: var(--font-size-md);
-  margin-top: 2px;
-}
-
 .auth-logo {
-  width: clamp(46px, 4vw, 58px);
-  height: clamp(46px, 4vw, 58px);
-  flex: 0 0 clamp(46px, 4vw, 58px);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  color: #ffffff;
-  background: linear-gradient(135deg, #28a9ee 0%, var(--color-primary) 58%, #0a65b8 100%);
-  box-shadow: 0 16px 28px rgba(46, 134, 193, 0.28), inset 0 1px 0 rgba(255,255,255,0.18);
+  display: block;
+  width: clamp(176px, 20vw, 292px);
+  height: auto;
+  object-fit: contain;
 }
 
 .auth-hero {
@@ -1120,6 +1089,9 @@ tbody td {
 }
 
 .auth-card-header .auth-logo {
+  width: clamp(132px, 14vw, 176px);
+  margin-left: auto;
+  margin-right: auto;
   margin-bottom: clamp(10px, 2vh, 16px);
 }
 
@@ -1273,14 +1245,6 @@ tbody td {
     min-height: auto;
     gap: clamp(14px, 2vw, 22px);
     padding: clamp(24px, 5vw, 42px);
-  }
-
-  .auth-brand-lockup strong {
-    font-size: var(--font-size-xl);
-  }
-
-  .auth-brand-lockup small {
-    font-size: var(--font-size-sm);
   }
 
   .auth-hero {
@@ -1447,9 +1411,8 @@ tbody td {
   }
 
   .auth-card-header .auth-logo {
-    width: 44px;
-    height: 44px;
-    flex-basis: 44px;
+    width: 128px;
+    height: auto;
     margin-bottom: var(--space-sm);
   }
 
@@ -1506,16 +1469,6 @@ tbody td {
   .auth-brand-panel {
     gap: var(--space-md);
     padding: var(--space-xl);
-  }
-
-  .auth-brand-lockup .auth-logo {
-    width: 48px;
-    height: 48px;
-    flex-basis: 48px;
-  }
-
-  .auth-brand-lockup strong {
-    font-size: var(--font-size-xl);
   }
 
   .auth-hero h1 {

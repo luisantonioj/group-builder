@@ -573,7 +573,7 @@ function DraggableCard({ candidate: c, adjacency }: { candidate: Candidate; adja
       {...attributes}
       style={{
         background: "var(--bg-page)",
-        border: `1px solid ${c.isConfirmed ? "var(--border-color)" : "#000"}`,
+        border: "1px solid transparent",
         borderRadius: "var(--radius-md)",
         padding: "8px 10px",
         marginBottom: "var(--space-xs)",
@@ -584,7 +584,7 @@ function DraggableCard({ candidate: c, adjacency }: { candidate: Candidate; adja
         opacity: isDragging ? 0.35 : 1,
         transition: "opacity 0.15s",
         touchAction: "none",
-        boxShadow: c.isConfirmed ? "none" : "0 0 0 1px #000",
+        boxShadow: "none",
       }}
     >
       <Initials name={c.fullName} gender={c.gender} size={26} fontSize={10} />
@@ -619,12 +619,12 @@ function DraggableMember({ candidate: m, isConflict, isLocked, onTogglePresence 
         borderRadius: "var(--radius-sm)",
         marginBottom: 2,
         background: isConflict ? "var(--color-conflict-bg)" : "var(--bg-page)",
-        border: `1px solid ${isConflict ? "var(--color-conflict-border)" : m.isConfirmed ? "transparent" : "#000"}`,
+        border: `1px solid ${isConflict ? "var(--color-conflict-border)" : "transparent"}`,
         cursor: isDragging ? "grabbing" : "grab",
         opacity: isDragging ? 0.35 : 1,
         transition: "opacity 0.15s",
         touchAction: "none",
-        boxShadow: !isConflict && !m.isConfirmed ? "0 0 0 1px #000" : "none",
+        boxShadow: "none",
       }}
     >
       <Initials name={m.fullName} gender={m.gender} size={22} fontSize={9} />
