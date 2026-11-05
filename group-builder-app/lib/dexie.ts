@@ -102,7 +102,13 @@ export type SyncMessage =
   | { type: "SYNC_DRAINED" }
   | { type: "AUTH_REQUIRED" }
   | { type: "RELOAD_FROM_SERVER" }
-  | { type: "REFRESH_DATA"; eventId: string };
+  | { type: "REFRESH_DATA"; eventId: string; tabId?: string };
+
+/** Identifies this browser tab, so it can ignore its own cross-tab broadcasts. */
+export const TAB_ID =
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `tab-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export function postSyncMessage(message: SyncMessage) {
   if (typeof window === "undefined" || typeof BroadcastChannel === "undefined") return;
