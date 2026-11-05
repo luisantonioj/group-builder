@@ -32,6 +32,7 @@ import {
   diffForSync,
   flushSyncQueue,
   SYNC_CHANNEL,
+  TAB_ID,
   type NewSyncItem,
   type SyncMessage,
 } from "./dexie";
@@ -288,10 +289,12 @@ async function readEventDataFromDexie(eventId: string) {
   if (!db) return null;
   const database = db;
 
+  // Same ordering as the API (candidates/rooms by name, groups by order) so the UI
+  // doesn't reshuffle when server data replaces the local copy.
   const [cands, grps, rms, conns, acts] = await Promise.all([
-    database.candidates.where("eventId").equals(eventId).toArray(),
+    database.candidates.where("eventId").equals(eventId).sortBy("fullName"),
     database.groups.where("eventId").equals(eventId).sortBy("order"),
-    database.rooms.where("eventId").equals(eventId).toArray(),
+    database.rooms.where("eventId").equals(eventId).sortBy("name"),
     database.connections.where("eventId").equals(eventId).toArray(),
     database.activities.orderBy("createdAt").reverse().limit(50).toArray(),
   ]);
@@ -425,78 +428,101 @@ export function AppProvider({
     dispatch({ type: "SET_EVENT", payload: event });
   }, []);
 
-  const loadEventData = useCallback(async (eventId: string) => {
-    // 1. Try to load from IndexedDB (Dexie) first for immediate, offline-first display
-    try {
-      const localData = await readEventDataFromDexie(eventId);
-      if (localData && (localData.candidates.length > 0 || localData.groups.length > 0 || localData.rooms.length > 0 || localData.connections.length > 0)) {
-        dispatch({
-          type: "SET_APP_DATA",
-          payload: localData,
-        });
-        setDataReady(true);
-      }
-    } catch {
-      // Ignore Dexie errors
-    }
-
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      setDataReady(true);
-      return;
-    }
-
+  /**
+   * Fetch the event from the server and apply it, unless local edits are still waiting to sync
+   * (before or during the fetch). Only keys whose content changed are dispatched, so an
+   * unchanged refresh causes no visible re-render.
+   */
+  const refreshFromServer = useCallback(async (eventId: string) => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
     // Don't overwrite optimistic local edits that haven't reached the server yet.
     // Failed / conflicting items don't block; they're surfaced in the sync panel instead.
-    const pendingLocalWrites = await countPendingWrites().catch(() => 0);
-    if (pendingLocalWrites > 0) {
-      setDataReady(true);
-      return;
-    }
+    if ((await countPendingWrites().catch(() => 0)) > 0) return;
 
-    // 2. Then, fetch from the server to ensure we have the latest data
     try {
       const [candidatesRes, groupsRes, roomsRes, connectionsRes] = await Promise.allSettled([
-        fetch(`/api/candidates?eventId=${eventId}`, { cache: "no-store" }).then((r) => r.json()),
+        fetch(`/api/candidates?eventId=${eventId}&pageSize=10000`, { cache: "no-store" }).then((r) => r.json()),
         fetch(`/api/groups?eventId=${eventId}`, { cache: "no-store" }).then((r) => r.json()),
         fetch(`/api/rooms?eventId=${eventId}`, { cache: "no-store" }).then((r) => r.json()),
         fetch(`/api/connections?eventId=${eventId}`, { cache: "no-store" }).then((r) => r.json()),
       ]);
 
       const newData: Partial<AppState> = {};
-      let hasNewData = false;
-
-      if (candidatesRes.status === "fulfilled" && candidatesRes.value.data) {
+      if (candidatesRes.status === "fulfilled" && Array.isArray(candidatesRes.value.data)) {
         newData.candidates = candidatesRes.value.data;
-        hasNewData = true;
       }
-      if (groupsRes.status === "fulfilled" && groupsRes.value.data) {
+      if (groupsRes.status === "fulfilled" && Array.isArray(groupsRes.value.data)) {
         newData.groups = groupsRes.value.data;
-        hasNewData = true;
       }
-      if (roomsRes.status === "fulfilled" && roomsRes.value.data) {
+      if (roomsRes.status === "fulfilled" && Array.isArray(roomsRes.value.data)) {
         newData.rooms = roomsRes.value.data;
-        hasNewData = true;
       }
-      if (connectionsRes.status === "fulfilled" && connectionsRes.value.data) {
-        newData.connections = connectionsRes.value.data.map((c: Connection & { from?: { fullName: string }; to?: { fullName: string } }) => ({
-          ...c,
-          fromName: c.from?.fullName ?? c.fromName,
-          toName:   c.to?.fullName   ?? c.toName,
-        }));
-        hasNewData = true;
+      if (connectionsRes.status === "fulfilled" && Array.isArray(connectionsRes.value.data)) {
+        newData.connections = connectionsRes.value.data.map(
+          (c: Connection & { from?: { fullName: string }; to?: { fullName: string } }) => ({
+            ...c,
+            // Older/auto connections may have an empty eventId; store them under this event
+            // so the local (offline) copy includes them and their conflicts.
+            eventId: c.eventId || eventId,
+            fromName: c.from?.fullName ?? c.fromName,
+            toName: c.to?.fullName ?? c.toName,
+          })
+        );
       }
+      if (Object.keys(newData).length === 0) return;
 
-      if (hasNewData) {
-        dispatch({ type: "SET_APP_DATA", payload: newData });
+      // The user may have changed something while the request was in flight — their
+      // newer local state wins; the next drained sync will refresh again.
+      if ((await countPendingWrites().catch(() => 0)) > 0) return;
+      if (stateRef.current.event.id !== eventId) return;
 
-        // 3. Replace local event data so deleted server rows do not reappear offline.
-        await replaceEventDataInDexie(eventId, newData);
+      const changed: Partial<AppState> = {};
+      for (const key of Object.keys(newData) as (keyof typeof newData)[]) {
+        if (JSON.stringify(newData[key]) !== JSON.stringify(stateRef.current[key])) {
+          (changed as Record<string, unknown>)[key] = newData[key];
+        }
+      }
+      if (Object.keys(changed).length) dispatch({ type: "SET_APP_DATA", payload: changed });
+
+      // Replace local event data so deleted server rows do not reappear offline.
+      await replaceEventDataInDexie(eventId, newData);
+    } catch {
+      // Network error — app stays with local data
+    }
+  }, []);
+
+  /** Initial load for an event: show the local copy immediately, then refresh from the server. */
+  const loadEventData = useCallback(async (eventId: string) => {
+    try {
+      const localData = await readEventDataFromDexie(eventId);
+      if (localData && (localData.candidates.length > 0 || localData.groups.length > 0 || localData.rooms.length > 0 || localData.connections.length > 0)) {
+        dispatch({ type: "SET_APP_DATA", payload: localData });
+        setDataReady(true);
       }
     } catch {
-      // Silently ignore network errors — app stays with Dexie data
+      // Ignore Dexie errors
+    }
+
+    try {
+      await refreshFromServer(eventId);
     } finally {
       setDataReady(true);
     }
+  }, [refreshFromServer]);
+
+  // Background refresh after the sync queue drains. Debounced so a burst of clicks
+  // (ticking several presence boxes) causes one quiet refresh, not one per click.
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleBackgroundRefresh = useCallback((eventId: string, delayMs = 1500) => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => {
+      refreshTimer.current = null;
+      refreshFromServer(eventId);
+    }, delayMs);
+  }, [refreshFromServer]);
+
+  useEffect(() => () => {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
   }, []);
 
   // ── Sync across tabs ─────────────────────────────────────────────────────────
@@ -506,11 +532,16 @@ export function AppProvider({
     const channel = new BroadcastChannel(SYNC_CHANNEL);
     channel.onmessage = (event: MessageEvent<SyncMessage>) => {
       if (event.data.type === "SYNC_DRAINED" || event.data.type === "RELOAD_FROM_SERVER") {
-        // Queue is empty (or a change was discarded): pull the latest server state.
-        if (state.event.id) loadEventData(state.event.id);
+        // Queue is empty (or a change was discarded): quietly pull the latest server state.
+        // Never re-read the local copy here: in-memory state is already up to date.
+        if (state.event.id) {
+          scheduleBackgroundRefresh(state.event.id, event.data.type === "RELOAD_FROM_SERVER" ? 0 : 1500);
+        }
         return;
       }
-      if (event.data.type === "REFRESH_DATA" && event.data.eventId === state.event.id) {
+      // BroadcastChannel also delivers to other channel objects in this same tab; only
+      // react to writes made by *other* tabs (this tab's state is already current).
+      if (event.data.type === "REFRESH_DATA" && event.data.eventId === state.event.id && event.data.tabId !== TAB_ID) {
         // Reload from Dexie (which has been updated by the other tab)
         readEventDataFromDexie(state.event.id).then((data) => {
           if (data) {
@@ -520,12 +551,12 @@ export function AppProvider({
       }
     };
     return () => channel.close();
-  }, [state.event.id, loadEventData]);
+  }, [state.event.id, scheduleBackgroundRefresh]);
 
   const notifyOtherTabs = useCallback(() => {
     if (typeof window !== "undefined") {
       const channel = new BroadcastChannel(SYNC_CHANNEL);
-      channel.postMessage({ type: "REFRESH_DATA", eventId: state.event.id });
+      channel.postMessage({ type: "REFRESH_DATA", eventId: state.event.id, tabId: TAB_ID } satisfies SyncMessage);
       channel.close();
     }
   }, [state.event.id]);
