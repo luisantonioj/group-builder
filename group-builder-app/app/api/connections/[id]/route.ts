@@ -7,7 +7,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = params;
-  const body = await req.json();
+  // Connections don't use conflict bases; drop the key if a client sends one.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { _base, ...body } = await req.json();
 
   // Verify the connection belongs to this org
   const conn = await prisma.connection.findFirst({

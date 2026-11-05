@@ -8,6 +8,7 @@ import { useSidebarState } from "@/lib/sidebar-state";
 import { useOrg } from "@/lib/org-context";
 import { useTerms } from "@/lib/use-terms";
 import { useApp } from "@/lib/store";
+import { clearLocalData, countPendingWrites } from "@/lib/dexie";
 
 interface SidebarProps {
   user: { name: string; role: string };
@@ -94,6 +95,27 @@ export default function Sidebar({ user }: SidebarProps) {
   const { orgName } = useOrg();
   const terms = useTerms();
   const { event } = useApp();
+
+  async function handleSignOut() {
+    try {
+      const pending = await countPendingWrites();
+      if (
+        pending > 0 &&
+        !confirm(
+          `You have ${pending} unsynced change${pending !== 1 ? "s" : ""}. Signing out now will discard ${
+            pending !== 1 ? "them" : "it"
+          }. Sign out anyway?`
+        )
+      ) {
+        return;
+      }
+      // Don't leave candidate data on a shared device.
+      await clearLocalData();
+    } catch {
+      // IndexedDB unavailable — nothing to clear
+    }
+    signOut({ callbackUrl: "/login" });
+  }
 
   const isAdmin = user.role === "ADMIN";
   const navItems = buildNavItems(
@@ -255,7 +277,7 @@ export default function Sidebar({ user }: SidebarProps) {
               </div>
             </div>
             <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={handleSignOut}
               style={{
                 width: "100%",
                 background: "rgba(255,255,255,0.05)",

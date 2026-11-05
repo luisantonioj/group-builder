@@ -63,8 +63,11 @@ function LoginForm() {
     if (result?.error) {
       setError("Invalid credentials or organization slug.");
     } else {
+      // Only follow same-origin relative paths (e.g. back to the page whose sync needed a re-login).
+      const callbackUrl = searchParams.get("callbackUrl");
+      const target = callbackUrl && callbackUrl.startsWith("/") && !callbackUrl.startsWith("//") ? callbackUrl : "/dashboard";
       router.refresh();
-      router.push("/dashboard");
+      router.push(target);
     }
   }
 

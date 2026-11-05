@@ -42,6 +42,12 @@ export async function POST(req: NextRequest) {
     });
     if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 });
 
+    // Idempotent create: a retried offline create returns the row it already made.
+    if (body.id) {
+      const already = await prisma.room.findFirst({ where: { id: body.id, eventId: event.id } });
+      if (already) return NextResponse.json({ data: already }, { status: 200 });
+    }
+
     const room = await prisma.room.create({ data: body });
     return NextResponse.json({ data: room }, { status: 201 });
   } catch {

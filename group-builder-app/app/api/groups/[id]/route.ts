@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOrgSession } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+import { conflictResponse, findConflictingFields, splitBase } from "@/lib/sync-conflicts";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await requireOrgSession();
@@ -22,13 +23,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
+  const { base, body } = splitBase(await req.json());
   try {
     // Verify ownership
     const existing = await prisma.group.findFirst({
       where: { id: params.id, event: { orgId: session.orgId } },
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const conflicts = findConflictingFields(existing as unknown as Record<string, unknown>, body, base);
+    if (conflicts.length) return conflictResponse(conflicts, existing as unknown as Record<string, unknown>);
 
     // Ensure we don't try to update fields that shouldn't be updated or cause prisma issues
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

@@ -278,23 +278,13 @@ export default function MasterlistPage() {
     if (!confirm(`Delete ${selectedIds.length} selected candidates? This cannot be undone.`)) return;
 
     const idsToDelete = [...selectedIds];
+    // Queued through the offline sync layer, which sends the deletes when online.
     deleteCandidates(idsToDelete);
     setSelectedIds([]);
-
-    try {
-      const res = await fetch("/api/candidates/batch-delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: idsToDelete }),
-      });
-      if (res.ok) {
-        showToast(`${idsToDelete.length} candidates deleted`, "success");
-      } else {
-        showToast("Failed to sync deletions with server", "error");
-      }
-    } catch {
-      showToast("Sync pending (offline)", "info");
-    }
+    showToast(
+      `${idsToDelete.length} candidates deleted${navigator.onLine ? "" : " (will sync when online)"}`,
+      "success"
+    );
   }
 
   function openNew() {
