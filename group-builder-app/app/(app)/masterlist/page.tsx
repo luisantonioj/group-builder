@@ -8,6 +8,7 @@ import { Chip, GenderChip, AllergyBadge } from "@/components/ui/chip";
 import Modal from "@/components/ui/modal";
 import Initials from "@/components/ui/initials";
 import SegmentedControl from "@/components/ui/segmented-control";
+import { keyActivate, pressable } from "@/lib/a11y";
 import { formatConnectionLabel } from "@/lib/utils";
 import type { Candidate, Connection, Gender, RelationshipType } from "@/types";
 
@@ -597,15 +598,15 @@ export default function MasterlistPage() {
             <thead>
               <tr>
                 <th style={{ width: 60, textAlign: "center" }}>Conf.</th>
-                <th style={thSort} onClick={() => handleSort("fullName")}>Name{sortArrow("fullName")}</th>
-                <th style={thSort} onClick={() => handleSort("gender")}>Gender{sortArrow("gender")}</th>
-                <th style={thSort} onClick={() => handleSort("age")}>Age{sortArrow("age")}</th>
-                <th style={thSort} onClick={() => handleSort("inviterName")}>Inviter{sortArrow("inviterName")}</th>
-                <th style={thSort} onClick={() => handleSort("connections")}>Connections{sortArrow("connections")}</th>
-                <th style={thSort} onClick={() => handleSort("group")}>Group{sortArrow("group")}</th>
-                <th style={thSort} onClick={() => handleSort("room")}>Room{sortArrow("room")}</th>
+                <th style={thSort} onClick={() => handleSort("fullName")} {...keyActivate(() => handleSort("fullName"))}>Name{sortArrow("fullName")}</th>
+                <th style={thSort} onClick={() => handleSort("gender")} {...keyActivate(() => handleSort("gender"))}>Gender{sortArrow("gender")}</th>
+                <th style={thSort} onClick={() => handleSort("age")} {...keyActivate(() => handleSort("age"))}>Age{sortArrow("age")}</th>
+                <th style={thSort} onClick={() => handleSort("inviterName")} {...keyActivate(() => handleSort("inviterName"))}>Inviter{sortArrow("inviterName")}</th>
+                <th style={thSort} onClick={() => handleSort("connections")} {...keyActivate(() => handleSort("connections"))}>Connections{sortArrow("connections")}</th>
+                <th style={thSort} onClick={() => handleSort("group")} {...keyActivate(() => handleSort("group"))}>Group{sortArrow("group")}</th>
+                <th style={thSort} onClick={() => handleSort("room")} {...keyActivate(() => handleSort("room"))}>Room{sortArrow("room")}</th>
                 {activeExtraCols.map((col) => (
-                  <th key={col.key as string} style={thSort} onClick={() => handleSort(col.key as string)}>
+                  <th key={col.key as string} style={thSort} onClick={() => handleSort(col.key as string)} {...keyActivate(() => handleSort(col.key as string))}>
                     {col.label}{sortArrow(col.key as string)}
                   </th>
                 ))}
@@ -617,7 +618,7 @@ export default function MasterlistPage() {
                       checked={filtered.length > 0 && selectedIds.length === filtered.length}
                       onChange={handleToggleSelectAll}
                       style={{ cursor: "pointer", width: 16, height: 16 }}
-                      title="Select all"
+                      title="Select all" aria-label="Select all"
                     />
                   </div>
                 </th>
@@ -631,11 +632,12 @@ export default function MasterlistPage() {
                 const room = rooms.find((r) => r.id === c.roomId);
                 const isSelected = selectedIds.includes(c.id);
                 return (
-                  <tr key={c.id} onClick={() => { setIsAddNew(false); setEditCandidate(c); }} style={{ background: isSelected ? "var(--bg-hover)" : undefined }}>
+                  <tr key={c.id} onClick={() => { setIsAddNew(false); setEditCandidate(c); }} {...keyActivate(() => { setIsAddNew(false); setEditCandidate(c); })} aria-label={`Open ${c.fullName}`} className="row-clickable" style={{ background: isSelected ? "var(--bg-hover)" : undefined }}>
                     <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
                       <input
                         type="checkbox"
                         checked={c.isConfirmed}
+                        aria-label={`${c.fullName} confirmed`}
                         onChange={async (e) => {
                           const checked = e.target.checked;
                           // Update local state and trigger sync
@@ -685,6 +687,7 @@ export default function MasterlistPage() {
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => handleToggleSelect(c.id)}
+                          aria-label={`Select ${c.fullName}`}
                           style={{ cursor: "pointer", width: 16, height: 16 }}
                         />
                       </div>
@@ -1344,7 +1347,8 @@ function CandidateModal({
                       {connSearchResults.map((c) => (
                         <div
                           key={c.id}
-                          onClick={() => { setConnSelectedId(c.id); setConnSearch(c.fullName); }}
+                          {...pressable(() => { setConnSelectedId(c.id); setConnSearch(c.fullName); })}
+                          aria-pressed={connSelectedId === c.id}
                           style={{
                             padding: "var(--space-sm) var(--space-md)", cursor: "pointer",
                             background: connSelectedId === c.id ? "var(--bg-hover)" : "transparent",
@@ -1463,7 +1467,7 @@ function CandidateModal({
                           </button>
                           <button
                             type="button"
-                            title="Dismiss connection"
+                            title="Dismiss connection" aria-label="Dismiss connection"
                             onClick={() => onDeleteConnection(conn.id)}
                             style={{
                               background: "none", border: "none", cursor: "pointer",
@@ -1484,7 +1488,7 @@ function CandidateModal({
                             type="button"
                             className="btn btn-sm btn-ghost"
                             onClick={() => setEditConn(conn)}
-                            title="Edit connection"
+                            title="Edit connection" aria-label="Edit connection"
                             style={{ padding: 4, display: "flex", alignItems: "center" }}
                           >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1493,7 +1497,7 @@ function CandidateModal({
                           </button>
                           <button
                             type="button"
-                            title="Remove connection"
+                            title="Remove connection" aria-label="Remove connection"
                             onClick={() => {
                               if (confirm(`Delete connection with ${otherName}?`)) {
                                 onDeleteConnection(conn.id);

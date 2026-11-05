@@ -8,6 +8,7 @@ import Initials from "@/components/ui/initials";
 import Modal from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { formatConnectionLabel } from "@/lib/utils";
+import { pressable } from "@/lib/a11y";
 import type { Connection } from "@/types";
 
 type Tab = "graph" | "clusters" | "table";
@@ -86,7 +87,7 @@ export default function VisualizerPage() {
   // Layout: clusters in a grid, singletons along the bottom (dynamic height calculation)
   const { canvasHeight, nodePositions } = useMemo(() => {
     const positions = new Map<string, { x: number; y: number }>();
-    
+
     const numClusterRows = Math.ceil(clusters.length / 5);
     const clusterSectionHeight = numClusterRows > 0 ? numClusterRows * 165 : 80;
 
@@ -260,7 +261,8 @@ export default function VisualizerPage() {
                     <g
                       key={cand.id}
                       style={{ cursor: "pointer" }}
-                      onClick={() => handleNodeClick(cand.id)}
+                      className="graph-node"
+                      {...pressable(() => handleNodeClick(cand.id), cand.fullName)}
                     >
                       {isSelected && (
                         <circle
@@ -801,8 +803,8 @@ export default function VisualizerPage() {
               <select
                 className="input"
                 value={editConn.relationshipType}
-                onChange={(e) => setEditConn({ 
-                  ...editConn, 
+                onChange={(e) => setEditConn({
+                  ...editConn,
                   relationshipType: e.target.value as any,
                   source: "MANUAL" // If user edited an AUTO connection, it becomes MANUAL
                 })}

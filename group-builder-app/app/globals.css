@@ -1904,3 +1904,32 @@ tbody td {
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 .sort-chip-clear:hover { color: var(--text-primary); background: var(--border-color); }
+
+/* ─── Focus ──────────────────────────────────────────────────────────────────── */
+/* Keyboard users get a clear brand-colored ring; mouse/touch focus (e.g. after a
+   drag-and-drop, when dnd-kit returns focus to the card) shows no outline. */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.cand-card:focus-visible,
+.icon-btn:focus-visible,
+.segmented-option:focus-visible { outline-offset: 1px; }
+.presence-toggle:focus-within:has(input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+.presence-toggle input:focus-visible { outline: none; }
+.input:focus-visible { outline: none; } /* inputs use their own border + glow */
+.row-clickable { cursor: pointer; }
+.row-clickable:focus-visible { outline-offset: -2px; }
+.graph-node:focus-visible { outline: none; }
+.graph-node:focus-visible circle { stroke: var(--color-primary); stroke-width: 3; }
+
+/* Tabs are touch targets too */
+.tab { min-height: 40px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
