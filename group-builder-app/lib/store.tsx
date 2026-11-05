@@ -11,6 +11,8 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
+  useState,
 } from "react";
 import { getMockInitialState } from "./mock-data";
 import {
@@ -21,7 +23,18 @@ import {
   deriveAutoConnections,
 } from "./conflict-detection";
 import type { Candidate, Connection, Group, Room, Activity, Event, Conflict } from "@/types";
-import { broadcastSyncQueueChanged, db, flushSyncQueue, type SyncQueueItem } from "./dexie";
+import {
+  addToQueue,
+  baseFor,
+  broadcastSyncQueueChanged,
+  countPendingWrites,
+  db,
+  diffForSync,
+  flushSyncQueue,
+  SYNC_CHANNEL,
+  type NewSyncItem,
+  type SyncMessage,
+} from "./dexie";
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -235,6 +248,8 @@ function buildInitialState(initialEvent: Event | null): AppState {
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 interface AppContextValue extends AppState {
+  /** False until the first local (IndexedDB) or server read for the active event finishes. */
+  dataReady: boolean;
   // Derived
   adjacency: Map<string, Set<string>>;
   groupConflicts: Omit<Conflict, "id" | "createdAt">[];
@@ -317,7 +332,7 @@ async function replaceEventDataInDexie(eventId: string, data: Partial<AppState>)
 
 async function persistOfflineWrite(
   write: () => Promise<void>,
-  items: Array<Omit<SyncQueueItem, "id" | "timestamp" | "retries">>
+  items: NewSyncItem[]
 ) {
   if (!db) return;
   const database = db;
@@ -327,9 +342,7 @@ async function persistOfflineWrite(
     [database.candidates, database.connections, database.groups, database.rooms, database.activities, database.syncQueue],
     async () => {
       await write();
-      await database.syncQueue.bulkAdd(
-        items.map((item) => ({ ...item, timestamp: Date.now(), retries: 0 }))
-      );
+      if (items.length) await addToQueue(items);
     }
   );
   broadcastSyncQueueChanged();
@@ -345,6 +358,10 @@ export function AppProvider({
   currentUser?: { id: string; name: string };
 }) {
   const [state, dispatch] = useReducer(reducer, buildInitialState(initialEvent));
+  // Latest state for mutations that need the "before" values (diffs + conflict bases).
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const [dataReady, setDataReady] = useState(!initialEvent);
 
   const autoConnections = useMemo(
     () => deriveAutoConnections(state.candidates),
@@ -404,6 +421,7 @@ export function AppProvider({
   }, [currentUser]);
 
   const setEvent = useCallback((event: Event) => {
+    setDataReady(!event.id);
     dispatch({ type: "SET_EVENT", payload: event });
   }, []);
 
@@ -416,15 +434,24 @@ export function AppProvider({
           type: "SET_APP_DATA",
           payload: localData,
         });
+        setDataReady(true);
       }
     } catch {
       // Ignore Dexie errors
     }
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setDataReady(true);
+      return;
+    }
 
-    const pendingLocalWrites = db ? await db.syncQueue.count().catch(() => 0) : 0;
-    if (pendingLocalWrites > 0) return;
+    // Don't overwrite optimistic local edits that haven't reached the server yet.
+    // Failed / conflicting items don't block; they're surfaced in the sync panel instead.
+    const pendingLocalWrites = await countPendingWrites().catch(() => 0);
+    if (pendingLocalWrites > 0) {
+      setDataReady(true);
+      return;
+    }
 
     // 2. Then, fetch from the server to ensure we have the latest data
     try {
@@ -467,6 +494,8 @@ export function AppProvider({
       }
     } catch {
       // Silently ignore network errors — app stays with Dexie data
+    } finally {
+      setDataReady(true);
     }
   }, []);
 
@@ -474,8 +503,13 @@ export function AppProvider({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const channel = new BroadcastChannel("group-builder-sync");
-    channel.onmessage = (event) => {
+    const channel = new BroadcastChannel(SYNC_CHANNEL);
+    channel.onmessage = (event: MessageEvent<SyncMessage>) => {
+      if (event.data.type === "SYNC_DRAINED" || event.data.type === "RELOAD_FROM_SERVER") {
+        // Queue is empty (or a change was discarded): pull the latest server state.
+        if (state.event.id) loadEventData(state.event.id);
+        return;
+      }
       if (event.data.type === "REFRESH_DATA" && event.data.eventId === state.event.id) {
         // Reload from Dexie (which has been updated by the other tab)
         readEventDataFromDexie(state.event.id).then((data) => {
@@ -486,11 +520,11 @@ export function AppProvider({
       }
     };
     return () => channel.close();
-  }, [state.event.id]);
+  }, [state.event.id, loadEventData]);
 
   const notifyOtherTabs = useCallback(() => {
     if (typeof window !== "undefined") {
-      const channel = new BroadcastChannel("group-builder-sync");
+      const channel = new BroadcastChannel(SYNC_CHANNEL);
       channel.postMessage({ type: "REFRESH_DATA", eventId: state.event.id });
       channel.close();
     }
@@ -515,11 +549,15 @@ export function AppProvider({
   }, [addActivity, notifyOtherTabs]);
 
   const updateCandidate = useCallback(async (candidate: Candidate) => {
+    const prev = stateRef.current.candidates.find((c) => c.id === candidate.id);
     dispatch({ type: "UPDATE_CANDIDATE", payload: candidate });
+    const diff = diffForSync("candidate", prev, candidate);
 
     persistOfflineWrite(
       () => db!.candidates.put(candidate).then(() => undefined),
-      [{ action: "update", entity: "candidate", entityId: candidate.id, payload: candidate }]
+      diff
+        ? [{ action: "update", entity: "candidate", entityId: candidate.id, payload: diff.payload, base: diff.base }]
+        : []
     ).then(() => {
       notifyOtherTabs();
       flushSyncQueue();
@@ -559,7 +597,7 @@ export function AppProvider({
   const importCandidates = useCallback((candidates: Candidate[]) => {
     dispatch({ type: "SET_CANDIDATES", payload: [...candidates, ...state.candidates] });
     addActivity(`Imported ${candidates.length} candidates`, "candidate", "imported");
-    
+
     persistOfflineWrite(
       () => db!.candidates.bulkPut(candidates).then(() => undefined),
       candidates.map((c) => ({ action: "create", entity: "candidate", entityId: c.id, payload: c }))
@@ -587,7 +625,7 @@ export function AppProvider({
     const connection = canonicalizeConnection({ ...conn, eventId: state.event.id });
     dispatch({ type: "ADD_CONNECTION", payload: connection });
     addActivity(`Added connection: ${connection.fromName} ↔ ${connection.toName}`, "connection", "created");
-    
+
     persistOfflineWrite(
       () => db!.connections.put(connection).then(() => undefined),
       [{ action: "create", entity: "connection", entityId: connection.id, payload: connection }]
@@ -599,11 +637,13 @@ export function AppProvider({
 
   const updateConnection = useCallback((conn: Connection) => {
     const connection = canonicalizeConnection({ ...conn, eventId: state.event.id });
+    const prev = stateRef.current.connections.find((c) => c.id === connection.id);
     dispatch({ type: "UPDATE_CONNECTION", payload: connection });
-    
+    const diff = diffForSync("connection", prev, connection);
+
     persistOfflineWrite(
       () => db!.connections.put(connection).then(() => undefined),
-      [{ action: "update", entity: "connection", entityId: connection.id, payload: connection }]
+      diff ? [{ action: "update", entity: "connection", entityId: connection.id, payload: diff.payload }] : []
     ).then(() => {
       notifyOtherTabs();
       flushSyncQueue();
@@ -612,7 +652,7 @@ export function AppProvider({
 
   const confirmConnection = useCallback((id: string) => {
     dispatch({ type: "CONFIRM_CONNECTION", payload: id });
-    
+
     persistOfflineWrite(
       () => db!.connections.update(id, { confirmed: true }).then(() => undefined),
       [{ action: "update", entity: "connection", entityId: id, payload: { confirmed: true } }]
@@ -624,7 +664,7 @@ export function AppProvider({
 
   const deleteConnection = useCallback((id: string) => {
     dispatch({ type: "DELETE_CONNECTION", payload: id });
-    
+
     persistOfflineWrite(
       () => db!.connections.delete(id).then(() => undefined),
       [{ action: "delete", entity: "connection", entityId: id, payload: {} }]
@@ -637,7 +677,7 @@ export function AppProvider({
   const addGroup = useCallback((group: Group) => {
     dispatch({ type: "ADD_GROUP", payload: group });
     addActivity(`Created group: ${group.name}`, "group", "created");
-    
+
     persistOfflineWrite(
       () => db!.groups.put(group).then(() => undefined),
       [{ action: "create", entity: "group", entityId: group.id, payload: group }]
@@ -648,11 +688,13 @@ export function AppProvider({
   }, [addActivity, notifyOtherTabs]);
 
   const updateGroup = useCallback((group: Group) => {
+    const prev = stateRef.current.groups.find((g) => g.id === group.id);
     dispatch({ type: "UPDATE_GROUP", payload: group });
-    
+    const diff = diffForSync("group", prev, group);
+
     persistOfflineWrite(
       () => db!.groups.put(group).then(() => undefined),
-      [{ action: "update", entity: "group", entityId: group.id, payload: group }]
+      diff ? [{ action: "update", entity: "group", entityId: group.id, payload: diff.payload, base: diff.base }] : []
     ).then(() => {
       notifyOtherTabs();
       flushSyncQueue();
@@ -661,7 +703,7 @@ export function AppProvider({
 
   const deleteGroup = useCallback((id: string) => {
     dispatch({ type: "DELETE_GROUP", payload: id });
-    
+
     persistOfflineWrite(
       async () => {
         await db!.groups.delete(id);
@@ -685,7 +727,13 @@ export function AppProvider({
 
     persistOfflineWrite(
       () => db!.candidates.update(candidateId, { groupId }).then(() => undefined),
-      [{ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } }]
+      [{
+        action: "update",
+        entity: "candidate",
+        entityId: candidateId,
+        payload: { groupId },
+        base: baseFor("candidate", candidate, ["groupId"]),
+      }]
     ).then(() => {
       notifyOtherTabs();
       flushSyncQueue();
@@ -700,10 +748,16 @@ export function AppProvider({
       candidates: state.candidates.filter((c) => c.groupId === g.id),
     }));
     const assignments = autoDistributeImpl(unassigned, groupsForDist, adjacency);
-    const syncItems: Array<Omit<SyncQueueItem, "id" | "timestamp" | "retries">> = [];
+    const syncItems: NewSyncItem[] = [];
     assignments.forEach((groupId, candidateId) => {
       dispatch({ type: "ASSIGN_TO_GROUP", payload: { candidateId, groupId } });
-      syncItems.push({ action: "update", entity: "candidate", entityId: candidateId, payload: { groupId } });
+      syncItems.push({
+        action: "update",
+        entity: "candidate",
+        entityId: candidateId,
+        payload: { groupId },
+        base: { groupId: null },
+      });
     });
     persistOfflineWrite(
       async () => {
@@ -732,7 +786,13 @@ export function AppProvider({
           await db!.candidates.update(c.id, { groupId: null });
         }
       },
-      assigned.map((c) => ({ action: "update", entity: "candidate", entityId: c.id, payload: { groupId: null } }))
+      assigned.map((c) => ({
+        action: "update" as const,
+        entity: "candidate" as const,
+        entityId: c.id,
+        payload: { groupId: null },
+        base: { groupId: c.groupId },
+      }))
     ).then(() => {
       notifyOtherTabs();
       flushSyncQueue();
@@ -740,11 +800,18 @@ export function AppProvider({
   }, [state.candidates, notifyOtherTabs]);
 
   const lockGroup = useCallback((groupId: string, locked: boolean) => {
+    const prev = stateRef.current.groups.find((g) => g.id === groupId);
     dispatch({ type: "LOCK_GROUP", payload: { groupId, locked } });
-    
+
     persistOfflineWrite(
       () => db!.groups.update(groupId, { isLocked: locked }).then(() => undefined),
-      [{ action: "update", entity: "group", entityId: groupId, payload: { isLocked: locked } }]
+      [{
+        action: "update",
+        entity: "group",
+        entityId: groupId,
+        payload: { isLocked: locked },
+        base: baseFor("group", prev, ["isLocked"]),
+      }]
     ).then(() => {
       notifyOtherTabs();
       flushSyncQueue();
@@ -753,7 +820,7 @@ export function AppProvider({
 
   const reorderGroups = useCallback((groupIds: string[]) => {
     dispatch({ type: "REORDER_GROUPS", payload: groupIds });
-    
+
     persistOfflineWrite(
       async () => {
         for (const [index, id] of groupIds.entries()) {
@@ -786,11 +853,13 @@ export function AppProvider({
   }, [addActivity, notifyOtherTabs]);
 
   const updateRoom = useCallback((room: Room) => {
+    const prev = stateRef.current.rooms.find((r) => r.id === room.id);
     dispatch({ type: "UPDATE_ROOM", payload: room });
+    const diff = diffForSync("room", prev, room);
 
     persistOfflineWrite(
       () => db!.rooms.put(room).then(() => undefined),
-      [{ action: "update", entity: "room", entityId: room.id, payload: room }]
+      diff ? [{ action: "update", entity: "room", entityId: room.id, payload: diff.payload, base: diff.base }] : []
     ).then(() => {
       notifyOtherTabs();
       flushSyncQueue();
@@ -823,7 +892,13 @@ export function AppProvider({
 
     persistOfflineWrite(
       () => db!.candidates.update(candidateId, { roomId }).then(() => undefined),
-      [{ action: "update", entity: "candidate", entityId: candidateId, payload: { roomId } }]
+      [{
+        action: "update",
+        entity: "candidate",
+        entityId: candidateId,
+        payload: { roomId },
+        base: baseFor("candidate", candidate, ["roomId"]),
+      }]
     ).then(() => {
       notifyOtherTabs();
       flushSyncQueue();
@@ -832,6 +907,7 @@ export function AppProvider({
 
   const value: AppContextValue = {
     ...state,
+    dataReady,
     connections: allConnections,
     adjacency,
     groupConflicts,

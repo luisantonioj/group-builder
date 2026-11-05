@@ -13,8 +13,6 @@ import {
   PointerSensor,
   TouchSensor,
   KeyboardSensor,
-  useDraggable,
-  useDroppable,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -26,17 +24,41 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useApp } from "@/lib/store";
+import { BoardSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import SearchInput from "@/components/ui/search-input";
 import { Chip } from "@/components/ui/chip";
-import Initials from "@/components/ui/initials";
 import Modal from "@/components/ui/modal";
-import { cn, formatConnectionLabel } from "@/lib/utils";
-import type { Candidate, Group, Connection, Conflict } from "@/types";
+import SegmentedControl from "@/components/ui/segmented-control";
+import EmptyState from "@/components/ui/empty-state";
+import { CollapseIcon, EditIcon, GripIcon } from "@/components/ui/icons";
+import {
+  DraggableCandidate,
+  DragOverlayCard,
+  PresenceToggle,
+  UnconfirmedLegend,
+  formatAge,
+} from "@/components/candidates/candidate-card";
+import {
+  AssignmentCard,
+  ConflictBanner,
+  DropHint,
+  PoolDropZone,
+  buildConflictMap,
+  type ConflictItem,
+} from "@/components/candidates/assignment-board";
+import { cn } from "@/lib/utils";
+import type { Candidate, Group } from "@/types";
+
+const GENDER_OPTIONS = [
+  { value: "ALL", label: "All" },
+  { value: "MALE", label: "♂ Male" },
+  { value: "FEMALE", label: "♀ Female" },
+] as const;
 
 
 export default function GroupsPage() {
-  const { candidates, connections, groups, adjacency, groupConflicts, assignToGroup, updateCandidate, autoDistribute, clearAllGroups, addGroup, deleteGroup, updateGroup, lockGroup, reorderGroups, event } = useApp();
+  const { candidates, connections, groups, adjacency, groupConflicts, assignToGroup, updateCandidate, autoDistribute, clearAllGroups, addGroup, deleteGroup, updateGroup, lockGroup, reorderGroups, event, dataReady } = useApp();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -85,34 +107,11 @@ export default function GroupsPage() {
     return map;
   }, [groups, candidates]);
 
-  // Lookup: sorted "idA:idB" → relationship label
-  const connectionByPair = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const conn of connections) {
-      const [a, b] = [conn.fromId, conn.toId].sort();
-      map.set(`${a}:${b}`, formatConnectionLabel(conn));
-    }
-    return map;
-  }, [connections]);
-
   // Per-group conflict items with names + relationship type
-  const conflictsByGroup = useMemo(() => {
-    const map = new Map<string, { aId: string; bId: string; aName: string; bName: string; type: string }[]>();
-    for (const c of groupConflicts) {
-      if (!c.groupId) continue;
-      const [a, b] = [c.candidateAId, c.candidateBId].sort();
-      const type = connectionByPair.get(`${a}:${b}`) ?? "Connection";
-      if (!map.has(c.groupId)) map.set(c.groupId, []);
-      map.get(c.groupId)!.push({
-        aId: c.candidateAId,
-        bId: c.candidateBId,
-        aName: c.candidateAName ?? c.candidateAId,
-        bName: c.candidateBName ?? c.candidateBId,
-        type,
-      });
-    }
-    return map;
-  }, [groupConflicts, connectionByPair]);
+  const conflictsByGroup = useMemo(
+    () => buildConflictMap(groupConflicts, connections, "groupId"),
+    [groupConflicts, connections]
+  );
 
   const activeDragCandidate = useMemo(
     () => candidates.find((c) => c.id === activeDragId),
@@ -275,6 +274,20 @@ export default function GroupsPage() {
   const totalAssigned = candidates.filter((c) => c.groupId).length;
   const totalConflicts = groupConflicts.length;
 
+
+  if (!dataReady) {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Group Formation</h1>
+          </div>
+        </div>
+        <BoardSkeleton />
+      </div>
+    );
+  }
+
   return (
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
       <div>
@@ -285,66 +298,71 @@ export default function GroupsPage() {
             <p className="page-sub">{totalAssigned} assigned · {candidates.filter((c) => !c.groupId).length} in pool</p>
           </div>
           <div style={{ display: "flex", gap: "var(--space-sm)" }}>
-            <button className="btn btn-secondary" onClick={handleClearAll}>Clear All</button>
-            <button className="btn btn-secondary" onClick={handleAutoDistribute}>✨ Distribute Evenly</button>
+            <button className="btn btn-ghost" onClick={handleClearAll} disabled={totalAssigned === 0}>Clear All</button>
             <button className="btn btn-secondary" onClick={handleOpenSetup}>Configure Groups</button>
+            <button className="btn btn-primary" onClick={handleAutoDistribute} disabled={groups.length === 0}>✨ Distribute Evenly</button>
           </div>
         </div>
 
         {/* Conflict banner */}
-        {totalConflicts > 0 && (
-          <div style={{ background: "var(--color-conflict-bg)", border: "1px solid var(--color-conflict-border)", borderRadius: "var(--radius-md)", padding: "10px var(--space-lg)", marginBottom: "var(--space-lg)", display: "flex", alignItems: "center", gap: "var(--space-sm)", fontSize: "var(--font-size-sm)", color: "var(--color-conflict-text)" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-              <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-            {totalConflicts} conflict{totalConflicts !== 1 ? "s" : ""} detected — connected candidates in the same group.
-          </div>
-        )}
+        <ConflictBanner count={totalConflicts} noun="group" />
 
         <div className="groups-layout">
           {/* Left: Candidate Pool */}
           <div className={cn("pool-sidebar", poolCollapsed && "collapsed")}>
             <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-              <div className="card-head" style={{ padding: "var(--space-md) var(--space-lg)" }}>
+              <div className="card-head pool-head">
                 <div>
-                  <div style={{ fontWeight: "var(--font-weight-semibold)", fontSize: "var(--font-size-sm)" }}>Candidate Pool</div>
-                  <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{unassigned.length} unassigned</div>
+                  <div className="pool-title">Candidate Pool</div>
+                  <div className="pool-sub">{unassigned.length} unassigned</div>
                 </div>
-                <button 
-                  className="pool-toggle-btn"
+                <button
+                  className="icon-btn"
                   onClick={() => setPoolCollapsed(!poolCollapsed)}
+                  aria-label={poolCollapsed ? "Expand pool" : "Collapse pool"}
+                  aria-expanded={!poolCollapsed}
                   title={poolCollapsed ? "Expand pool" : "Collapse pool"}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    {poolCollapsed ? <polyline points="13 17 18 12 13 7" /> : <polyline points="11 17 6 12 11 7" />}
-                    {poolCollapsed ? <polyline points="6 17 11 12 6 7" /> : <polyline points="18 17 13 12 18 7" />}
-                  </svg>
+                  <CollapseIcon collapsed={poolCollapsed} />
                 </button>
               </div>
-              
+
               {!poolCollapsed && (
                 <>
-                  <div style={{ padding: "var(--space-md)" }}>
-                    <SearchInput value={search} onChange={setSearch} placeholder="Search…" />
-                    <div style={{ display: "flex", gap: 2, marginTop: "var(--space-sm)" }}>
-                      {(["ALL", "MALE", "FEMALE"] as const).map((v) => (
-                        <button key={v} onClick={() => setGenderFilter(v)} className={`btn btn-sm ${genderFilter === v ? "btn-primary" : "btn-ghost"}`} style={{ flex: 1 }}>
-                          {v === "ALL" ? "All" : v === "MALE" ? "♂" : "♀"}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="pool-controls">
+                    <SearchInput value={search} onChange={setSearch} placeholder="Search name or age…" />
+                    <SegmentedControl
+                      label="Filter pool by gender"
+                      value={genderFilter}
+                      onChange={setGenderFilter}
+                      options={GENDER_OPTIONS}
+                      fill
+                    />
                   </div>
-                  <PoolDropZone id="pool" style={{ flex: 1, overflowY: "auto", padding: "0 var(--space-md) var(--space-md)" }}>
-                    {unassigned.map((c) => (
-                      <DraggableCard key={c.id} candidate={c} adjacency={adjacency} />
-                    ))}
+                  <PoolDropZone id="pool">
+                    {unassigned.map((c) => {
+                      const degree = adjacency.get(c.id)?.size ?? 0;
+                      return (
+                        <DraggableCandidate
+                          key={c.id}
+                          candidate={c}
+                          meta={formatAge(c.age)}
+                          trailing={
+                            degree > 0 ? (
+                              <Chip kind="warning" title={`${degree} connection${degree !== 1 ? "s" : ""}`}>{degree}</Chip>
+                            ) : undefined
+                          }
+                        />
+                      );
+                    })}
                     {unassigned.length === 0 && (
-                      <div style={{ textAlign: "center", padding: "var(--space-xl) 0", color: "var(--text-muted)", fontSize: "var(--font-size-sm)" }}>
-                        {candidates.filter((c) => !c.groupId).length === 0 ? "All assigned! 🎉" : "No matches."}
-                      </div>
+                      <EmptyState
+                        tone={candidates.some((c) => !c.groupId) ? "default" : "success"}
+                        title={candidates.some((c) => !c.groupId) ? "No matches" : "All assigned 🎉"}
+                      />
                     )}
                   </PoolDropZone>
+                  <UnconfirmedLegend />
                 </>
               )}
             </div>
@@ -353,13 +371,15 @@ export default function GroupsPage() {
           {/* Right: Group Cards */}
           <div className="groups-grid-container">
             {groups.length === 0 ? (
-              <div className="card" style={{ padding: "var(--space-2xl)", textAlign: "center" }}>
-                <div style={{ color: "var(--text-muted)", marginBottom: "var(--space-lg)" }}>No groups set up yet.</div>
-                <button className="btn btn-primary" onClick={handleOpenSetup}>Set Up Groups</button>
-              </div>
+              <EmptyState
+                variant="card"
+                title="No groups set up yet"
+                description="Create groups, then drag candidates from the pool or distribute them evenly."
+                action={<button className="btn btn-primary" onClick={handleOpenSetup}>Set Up Groups</button>}
+              />
             ) : (
               <SortableContext items={groups.map((g) => g.id)} strategy={rectSortingStrategy}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: "var(--space-lg)" }}>
+                <div className="assign-grid">
                   {groups.map((group) => {
                     const members = groupedCandidates.get(group.id) ?? [];
                     const conflictItems = conflictsByGroup.get(group.id) ?? [];
@@ -402,15 +422,7 @@ export default function GroupsPage() {
           );
         })()}
         {!activeDragIsGroup && activeDragCandidate && (
-          <div style={{ background: "var(--bg-card)", border: "1px solid var(--color-primary)", borderRadius: "var(--radius-md)", padding: "8px 12px", boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: "var(--space-sm)", fontSize: "var(--font-size-sm)", width: 220, opacity: 0.95 }}>
-            <Initials name={activeDragCandidate.fullName} gender={activeDragCandidate.gender} size={28} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: "var(--font-weight-semibold)" }}>{activeDragCandidate.fullName}</div>
-              <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
-                {activeDragCandidate.age !== null ? `Age: ${activeDragCandidate.age}` : "Age unknown"}
-              </div>
-            </div>
-          </div>
+          <DragOverlayCard candidate={activeDragCandidate} meta={formatAge(activeDragCandidate.age)} />
         )}
       </DragOverlay>
 
@@ -444,7 +456,7 @@ export default function GroupsPage() {
               </button>
               <button
                 className="btn btn-secondary"
-                style={{ justifyContent: "flex-start", textAlign: "left", color: "var(--color-danger, #e74c3c)" }}
+                style={{ justifyContent: "flex-start", textAlign: "left", color: "var(--color-danger)" }}
                 onClick={() => setKeepExisting(false)}
               >
                 Delete all existing groups and start fresh
@@ -509,7 +521,7 @@ export default function GroupsPage() {
       <Modal open={editGroupOpen} title="Edit Group" onClose={() => { setEditGroupOpen(false); setEditGroupData(null); }}
         footer={
           <div style={{ display: "flex", width: "100%", justifyContent: "space-between" }}>
-            <button className="btn" style={{ color: "var(--color-danger)" }} onClick={handleDeleteGroup}>Delete Group</button>
+            <button className="btn btn-danger-outline" onClick={handleDeleteGroup}>Delete Group</button>
             <div style={{ display: "flex", gap: "var(--space-sm)" }}>
               <button className="btn btn-secondary" onClick={() => { setEditGroupOpen(false); setEditGroupData(null); }}>Cancel</button>
               <button className="btn btn-primary" onClick={handleEditGroup}>Save Changes</button>
@@ -542,114 +554,6 @@ export default function GroupsPage() {
   );
 }
 
-// ─── Pool Drop Zone ───────────────────────────────────────────────────────────
-
-function PoolDropZone({ id, children, style }: { id: string; children: React.ReactNode; style?: React.CSSProperties }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        ...style,
-        borderRadius: "var(--radius-md)",
-        transition: "background 0.15s",
-        background: isOver ? "var(--bg-selected, rgba(46,134,193,0.08))" : undefined,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-// ─── Draggable Card (pool) ────────────────────────────────────────────────────
-
-function DraggableCard({ candidate: c, adjacency }: { candidate: Candidate; adjacency: Map<string, Set<string>> }) {
-  const degree = adjacency.get(c.id)?.size ?? 0;
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: c.id });
-  return (
-    <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      style={{
-        background: "var(--bg-page)",
-        border: "1px solid transparent",
-        borderRadius: "var(--radius-md)",
-        padding: "8px 10px",
-        marginBottom: "var(--space-xs)",
-        display: "flex",
-        alignItems: "center",
-        gap: "var(--space-sm)",
-        cursor: isDragging ? "grabbing" : "grab",
-        opacity: isDragging ? 0.35 : 1,
-        transition: "opacity 0.15s",
-        touchAction: "none",
-        boxShadow: "none",
-      }}
-    >
-      <Initials name={c.fullName} gender={c.gender} size={26} fontSize={10} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.fullName}</div>
-        <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{c.age !== null ? `Age: ${c.age}` : "Age unknown"}</div>
-      </div>
-      {degree > 0 && <Chip kind="warning">{degree}</Chip>}
-    </div>
-  );
-}
-
-// ─── Draggable Member (inside group) ─────────────────────────────────────────
-
-function DraggableMember({ candidate: m, isConflict, isLocked, onTogglePresence }: {
-  candidate: Candidate;
-  isConflict: boolean;
-  isLocked: boolean;
-  onTogglePresence: (isPresent: boolean) => void;
-}) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: m.id });
-  return (
-    <div
-      ref={setNodeRef}
-      {...listeners}
-      {...attributes}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "var(--space-sm)",
-        padding: "5px 8px",
-        borderRadius: "var(--radius-sm)",
-        marginBottom: 2,
-        background: isConflict ? "var(--color-conflict-bg)" : "var(--bg-page)",
-        border: `1px solid ${isConflict ? "var(--color-conflict-border)" : "transparent"}`,
-        cursor: isDragging ? "grabbing" : "grab",
-        opacity: isDragging ? 0.35 : 1,
-        transition: "opacity 0.15s",
-        touchAction: "none",
-        boxShadow: "none",
-      }}
-    >
-      <Initials name={m.fullName} gender={m.gender} size={22} fontSize={9} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", color: isConflict ? "var(--color-conflict-text)" : "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-          {m.fullName}{isConflict && " ⚠"}
-        </div>
-        <div style={{ fontSize: 10, color: "var(--text-muted)" }}>
-          {m.age ? `Age ${m.age}` : "Age unknown"}
-        </div>
-      </div>
-      {!isLocked && (
-        <input
-          type="checkbox"
-          checked={m.isPresent || false}
-          onPointerDown={(e) => e.stopPropagation()}
-          onChange={(e) => onTogglePresence(e.target.checked)}
-          style={{ cursor: "pointer", width: 16, height: 16, flexShrink: 0, margin: "0 4px" }}
-          title={m.isPresent ? "Present" : "Not Yet Present"}
-        />
-      )}
-    </div>
-  );
-}
-
 // ─── Sortable Name Input (Configure Groups modal) ────────────────────────────
 
 function SortableNameInput({ id, value, index, onChange }: {
@@ -677,13 +581,10 @@ function SortableNameInput({ id, value, index, onChange }: {
         {...listeners}
         {...attributes}
         type="button"
-        style={{ background: "none", border: "none", cursor: "grab", color: "var(--text-muted)", padding: "2px 4px", display: "flex", alignItems: "center", flexShrink: 0, touchAction: "none" }}
+        className="icon-btn icon-btn-grab"
+        aria-label={`Reorder group ${index + 1}`}
       >
-        <svg width="12" height="14" viewBox="0 0 12 14" fill="currentColor">
-          <circle cx="3" cy="2" r="1.2"/><circle cx="9" cy="2" r="1.2"/>
-          <circle cx="3" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/>
-          <circle cx="3" cy="12" r="1.2"/><circle cx="9" cy="12" r="1.2"/>
-        </svg>
+        <GripIcon />
       </button>
       <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", minWidth: 20, textAlign: "right", flexShrink: 0 }}>{index + 1}.</span>
       <input
@@ -698,14 +599,6 @@ function SortableNameInput({ id, value, index, onChange }: {
 }
 
 // ─── Sortable Group Card ──────────────────────────────────────────────────────
-
-interface ConflictItem {
-  aId: string;
-  bId: string;
-  aName: string;
-  bName: string;
-  type: string;
-}
 
 function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onTogglePresence, onEditClick }: {
   group: Group;
@@ -732,109 +625,68 @@ function SortableGroupCard({ group, members, conflictItems, isFull, isOver, onTo
   const females = members.filter((m) => m.gender === "FEMALE").length;
 
   return (
-    <div
+    <AssignmentCard
       ref={setNodeRef}
-      className="drop-zone"
-      style={{
-        background: "var(--bg-card)",
-        border: `2px solid ${hasConflicts ? "var(--color-conflict-border)" : isOver ? "var(--color-primary)" : "var(--border-color)"}`,
-        borderRadius: "var(--radius-lg)",
-        overflow: "hidden",
-        transition: `border-color 0.15s, box-shadow 0.15s, ${transition ?? ""}`,
-        boxShadow: isOver ? "0 0 0 4px rgba(46,134,193,0.15)" : "var(--shadow-sm)",
-        transform: CSS.Transform.toString(transform),
-        opacity: isDragging ? 0.45 : 1,
-      }}
-    >
-      {/* Header */}
-      <div style={{ padding: "12px var(--space-lg)", borderBottom: `1px solid var(--border-color)`, display: "flex", alignItems: "center", justifyContent: "space-between", background: hasConflicts ? "var(--color-conflict-bg)" : "var(--bg-hover)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-          <button
-            ref={setActivatorNodeRef}
-            {...listeners}
-            {...attributes}
-            type="button"
-            title="Drag to reorder"
-            style={{ background: "none", border: "none", cursor: "grab", color: "var(--text-muted)", padding: "2px 4px", display: "flex", alignItems: "center", flexShrink: 0, touchAction: "none" }}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
-              <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
-              <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
-            </svg>
-          </button>
-          <span style={{ fontWeight: "var(--font-weight-semibold)", fontSize: "var(--font-size-sm)", color: "var(--text-primary)" }}>{group.name}</span>
-          {hasConflicts && <Chip kind="danger">⚠ {conflictItems.length}</Chip>}
-          {group.isLocked && <Chip kind="default">🔒</Chip>}
-          {isFull && <Chip kind="success">Full</Chip>}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{members.length}/{group.capacity}</span>
-          <button onClick={onEditClick} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex" }} title="Edit Group">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      {/* Gender split bar */}
-      {members.length > 0 && (
-        <div style={{ height: 3, background: "var(--border-color)", display: "flex" }}>
-          <div style={{ width: `${(males / members.length) * 100}%`, background: "var(--color-male)", transition: "width 0.3s" }} />
-          <div style={{ width: `${(females / members.length) * 100}%`, background: "var(--color-female)", transition: "width 0.3s" }} />
-        </div>
-      )}
-
-      {/* Members */}
-      <div style={{ padding: "var(--space-sm)", minHeight: 64 }}>
-        {members.length === 0 && (
-          <div style={{ textAlign: "center", padding: "var(--space-lg) var(--space-sm)", color: "var(--text-muted)", fontSize: "var(--font-size-xs)", border: "1.5px dashed var(--border-color)", borderRadius: "var(--radius-md)", margin: "4px" }}>
-            Drag candidates here
-          </div>
-        )}
-        {members.map((m) => (
-          <DraggableMember
-            key={m.id}
-            candidate={m}
-            isConflict={conflictIds.has(m.id)}
-            isLocked={group.isLocked}
-            onTogglePresence={(isPresent) => onTogglePresence(m.id, isPresent)}
-          />
-        ))}
-      </div>
-
-      {/* Conflict list */}
-      {hasConflicts && (
-        <div style={{ borderTop: "1px solid var(--color-conflict-border)", background: "var(--color-conflict-bg)", padding: "var(--space-xs) var(--space-sm)" }}>
-          {conflictItems.map((item, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: "3px 4px",
-                padding: "3px 2px",
-                fontSize: "var(--font-size-xs)",
-                color: "var(--color-conflict-text)",
-                lineHeight: 1.4,
-              }}
+      isOver={isOver}
+      hasConflicts={hasConflicts}
+      isDragging={isDragging}
+      style={{ transform: CSS.Transform.toString(transform), transition: transition ?? undefined }}
+      conflicts={conflictItems}
+      header={
+        <>
+          <div className="assign-card-title-row">
+            <button
+              ref={setActivatorNodeRef}
+              {...listeners}
+              {...attributes}
+              type="button"
+              className="icon-btn icon-btn-grab"
+              aria-label={`Reorder ${group.name}`}
+              title="Drag to reorder"
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}>
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-              <span style={{ fontWeight: "var(--font-weight-semibold)" }}>{item.aName}</span>
-              <span style={{ opacity: 0.65 }}>and</span>
-              <span style={{ fontWeight: "var(--font-weight-semibold)" }}>{item.bName}</span>
-              <span style={{ opacity: 0.5, margin: "0 1px" }}>●</span>
-              <span style={{ opacity: 0.75 }}>{item.type}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+              <GripIcon size={12} />
+            </button>
+            <span className="assign-card-title">{group.name}</span>
+            {hasConflicts && <Chip kind="danger">⚠ {conflictItems.length}</Chip>}
+            {group.isLocked && <Chip kind="default" title="Locked">🔒</Chip>}
+            {isFull && <Chip kind="success">Full</Chip>}
+          </div>
+          <div className="assign-card-actions">
+            <span className="assign-card-count">{members.length}/{group.capacity}</span>
+            <button onClick={onEditClick} className="icon-btn" aria-label={`Edit ${group.name}`} title="Edit group">
+              <EditIcon />
+            </button>
+          </div>
+        </>
+      }
+      subheader={
+        members.length > 0 && (
+          <div className="gender-split" aria-label={`${males} male, ${females} female`}>
+            <div style={{ width: `${(males / members.length) * 100}%`, background: "var(--color-male)" }} />
+            <div style={{ width: `${(females / members.length) * 100}%`, background: "var(--color-female)" }} />
+          </div>
+        )
+      }
+    >
+      {members.length === 0 && <DropHint />}
+      {members.map((m) => (
+        <DraggableCandidate
+          key={m.id}
+          variant="member"
+          candidate={m}
+          meta={formatAge(m.age)}
+          isConflict={conflictIds.has(m.id)}
+          trailing={
+            !group.isLocked && (
+              <PresenceToggle
+                name={m.fullName}
+                checked={m.isPresent || false}
+                onChange={(isPresent) => onTogglePresence(m.id, isPresent)}
+              />
+            )
+          }
+        />
+      ))}
+    </AssignmentCard>
   );
 }

@@ -2,11 +2,14 @@
 
 import { useState, useMemo, useRef } from "react";
 import { useApp } from "@/lib/store";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import SearchInput from "@/components/ui/search-input";
 import { Chip, GenderChip, AllergyBadge } from "@/components/ui/chip";
 import Modal from "@/components/ui/modal";
 import Initials from "@/components/ui/initials";
+import SegmentedControl from "@/components/ui/segmented-control";
+import { keyActivate, pressable } from "@/lib/a11y";
 import { formatConnectionLabel } from "@/lib/utils";
 import type { Candidate, Connection, Gender, RelationshipType } from "@/types";
 
@@ -108,7 +111,7 @@ interface ImportModalData {
 }
 
 export default function MasterlistPage() {
-  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, deleteCandidates, importCandidates, addConnection, updateConnection, confirmConnection, deleteConnection, event: batch } = useApp();
+  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, deleteCandidates, importCandidates, addConnection, updateConnection, confirmConnection, deleteConnection, event: batch, dataReady } = useApp();
   const { showToast } = useToast();
 
   // Filters
@@ -278,23 +281,13 @@ export default function MasterlistPage() {
     if (!confirm(`Delete ${selectedIds.length} selected candidates? This cannot be undone.`)) return;
 
     const idsToDelete = [...selectedIds];
+    // Queued through the offline sync layer, which sends the deletes when online.
     deleteCandidates(idsToDelete);
     setSelectedIds([]);
-
-    try {
-      const res = await fetch("/api/candidates/batch-delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: idsToDelete }),
-      });
-      if (res.ok) {
-        showToast(`${idsToDelete.length} candidates deleted`, "success");
-      } else {
-        showToast("Failed to sync deletions with server", "error");
-      }
-    } catch {
-      showToast("Sync pending (offline)", "info");
-    }
+    showToast(
+      `${idsToDelete.length} candidates deleted${navigator.onLine ? "" : " (will sync when online)"}`,
+      "success"
+    );
   }
 
   function openNew() {
@@ -386,7 +379,7 @@ export default function MasterlistPage() {
     for (const c of parsed) {
       const nameKey = normName(c.fullName);
       const contactKey = c.contact ? normContact(c.contact) : null;
-      
+
       // Check if duplicate within this file
       if (seenNamesInFile.has(nameKey) || (contactKey && seenContactsInFile.has(contactKey))) {
          skippedDupes.push(c.fullName);
@@ -462,7 +455,7 @@ export default function MasterlistPage() {
     if (freshCandidates.length > 0) {
       importCandidates(freshCandidates);
     }
-    
+
     // Update local store with modified candidates
     for (const uc of updatedCandidates) {
       updateCandidate(uc);
@@ -474,12 +467,12 @@ export default function MasterlistPage() {
     const created = freshCandidates.length;
     const updated = updatedCandidates.length;
     const dupes = skippedDupes.length;
-    
+
     const parts = [];
     if (created > 0) parts.push(`${created} imported`);
     if (updated > 0) parts.push(`${updated} updated`);
     if (dupes > 0) parts.push(`${dupes} skipped`);
-    
+
     showToast(parts.join(" · "), "success");
   }
 
@@ -487,6 +480,20 @@ export default function MasterlistPage() {
 
   const totalCols = 8 + activeExtraCols.length;
   const activeSortLabel = sortConfig ? sortCols.find((c) => c.key === sortConfig.key)?.label ?? sortConfig.key : null;
+
+
+  if (!dataReady) {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Masterlist</h1>
+          </div>
+        </div>
+        <TableSkeleton rows={10} />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -530,41 +537,46 @@ export default function MasterlistPage() {
 
       {/* Filters */}
       <div style={{ display: "flex", gap: "var(--space-sm)", marginBottom: "var(--space-lg)", alignItems: "center", flexWrap: "wrap" }}>
-        <SearchInput value={search} onChange={setSearch} placeholder="Search name, school, inviter…" className="search-input" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search name, school, inviter…" />
 
         {/* Gender toggle */}
-        <div style={{ display: "flex", gap: 2, background: "var(--bg-hover)", borderRadius: "var(--radius-sm)", padding: 3 }}>
-          {(["ALL", "MALE", "FEMALE"] as const).map((v) => (
-            <button key={v} onClick={() => setGenderFilter(v)} className={`btn btn-sm ${genderFilter === v ? "btn-primary" : "btn-ghost"}`} style={{ padding: "4px 10px" }}>
-              {v === "ALL" ? "All" : v === "MALE" ? "♂ Male" : "♀ Female"}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Filter by gender"
+          value={genderFilter}
+          onChange={setGenderFilter}
+          options={[
+            { value: "ALL", label: "All" },
+            { value: "MALE", label: "♂ Male" },
+            { value: "FEMALE", label: "♀ Female" },
+          ]}
+        />
 
         {/* Status toggle */}
-        <div style={{ display: "flex", gap: 2, background: "var(--bg-hover)", borderRadius: "var(--radius-sm)", padding: 3 }}>
-          {(["ALL", "GROUPED", "UNGROUPED"] as const).map((v) => (
-            <button key={v} onClick={() => setStatusFilter(v)} className={`btn btn-sm ${statusFilter === v ? "btn-primary" : "btn-ghost"}`} style={{ padding: "4px 10px" }}>
-              {v.charAt(0) + v.slice(1).toLowerCase()}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Filter by group status"
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={[
+            { value: "ALL", label: "All" },
+            { value: "GROUPED", label: "Grouped" },
+            { value: "UNGROUPED", label: "Ungrouped" },
+          ]}
+        />
 
         {/* Right-side controls */}
         <div style={{ display: "flex", gap: "var(--space-sm)", alignItems: "center", marginLeft: "auto", flexWrap: "wrap" }}>
           {/* Active sort chip */}
           {sortConfig && activeSortLabel && (
-            <div
-              style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--bg-hover)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "3px 8px", fontSize: "var(--font-size-xs)", cursor: "pointer" }}
-              onClick={() => setSortModalOpen(true)}
-            >
-              <span style={{ color: "var(--text-secondary)" }}>
-                {activeSortLabel} {sortConfig.dir === "asc" ? "↑" : "↓"}
-              </span>
-              <span
-                onClick={(e) => { e.stopPropagation(); setSortConfig(null); }}
-                style={{ marginLeft: 2, color: "var(--text-muted)", cursor: "pointer", lineHeight: 1, fontWeight: "bold" }}
-              >×</span>
+            <div className="sort-chip">
+              <button type="button" className="sort-chip-label" onClick={() => setSortModalOpen(true)}>
+                Sorted by {activeSortLabel} {sortConfig.dir === "asc" ? "↑" : "↓"}
+              </button>
+              <button
+                type="button"
+                className="sort-chip-clear"
+                aria-label="Clear sort"
+                onClick={() => setSortConfig(null)}
+              >×</button>
             </div>
           )}
 
@@ -601,15 +613,15 @@ export default function MasterlistPage() {
             <thead>
               <tr>
                 <th style={{ width: 60, textAlign: "center" }}>Conf.</th>
-                <th style={thSort} onClick={() => handleSort("fullName")}>Name{sortArrow("fullName")}</th>
-                <th style={thSort} onClick={() => handleSort("gender")}>Gender{sortArrow("gender")}</th>
-                <th style={thSort} onClick={() => handleSort("age")}>Age{sortArrow("age")}</th>
-                <th style={thSort} onClick={() => handleSort("inviterName")}>Inviter{sortArrow("inviterName")}</th>
-                <th style={thSort} onClick={() => handleSort("connections")}>Connections{sortArrow("connections")}</th>
-                <th style={thSort} onClick={() => handleSort("group")}>Group{sortArrow("group")}</th>
-                <th style={thSort} onClick={() => handleSort("room")}>Room{sortArrow("room")}</th>
+                <th style={thSort} onClick={() => handleSort("fullName")} {...keyActivate(() => handleSort("fullName"))}>Name{sortArrow("fullName")}</th>
+                <th style={thSort} onClick={() => handleSort("gender")} {...keyActivate(() => handleSort("gender"))}>Gender{sortArrow("gender")}</th>
+                <th style={thSort} onClick={() => handleSort("age")} {...keyActivate(() => handleSort("age"))}>Age{sortArrow("age")}</th>
+                <th style={thSort} onClick={() => handleSort("inviterName")} {...keyActivate(() => handleSort("inviterName"))}>Inviter{sortArrow("inviterName")}</th>
+                <th style={thSort} onClick={() => handleSort("connections")} {...keyActivate(() => handleSort("connections"))}>Connections{sortArrow("connections")}</th>
+                <th style={thSort} onClick={() => handleSort("group")} {...keyActivate(() => handleSort("group"))}>Group{sortArrow("group")}</th>
+                <th style={thSort} onClick={() => handleSort("room")} {...keyActivate(() => handleSort("room"))}>Room{sortArrow("room")}</th>
                 {activeExtraCols.map((col) => (
-                  <th key={col.key as string} style={thSort} onClick={() => handleSort(col.key as string)}>
+                  <th key={col.key as string} style={thSort} onClick={() => handleSort(col.key as string)} {...keyActivate(() => handleSort(col.key as string))}>
                     {col.label}{sortArrow(col.key as string)}
                   </th>
                 ))}
@@ -621,7 +633,7 @@ export default function MasterlistPage() {
                       checked={filtered.length > 0 && selectedIds.length === filtered.length}
                       onChange={handleToggleSelectAll}
                       style={{ cursor: "pointer", width: 16, height: 16 }}
-                      title="Select all"
+                      title="Select all" aria-label="Select all"
                     />
                   </div>
                 </th>
@@ -635,11 +647,12 @@ export default function MasterlistPage() {
                 const room = rooms.find((r) => r.id === c.roomId);
                 const isSelected = selectedIds.includes(c.id);
                 return (
-                  <tr key={c.id} onClick={() => { setIsAddNew(false); setEditCandidate(c); }} style={{ background: isSelected ? "var(--bg-hover)" : undefined }}>
+                  <tr key={c.id} onClick={() => { setIsAddNew(false); setEditCandidate(c); }} {...keyActivate(() => { setIsAddNew(false); setEditCandidate(c); })} aria-label={`Open ${c.fullName}`} className="row-clickable" style={{ background: isSelected ? "var(--bg-hover)" : undefined }}>
                     <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
                       <input
                         type="checkbox"
                         checked={c.isConfirmed}
+                        aria-label={`${c.fullName} confirmed`}
                         onChange={async (e) => {
                           const checked = e.target.checked;
                           // Update local state and trigger sync
@@ -652,7 +665,7 @@ export default function MasterlistPage() {
                     </td>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-                        <Initials name={c.fullName} gender={c.gender} size={28} />
+                        <Initials name={c.fullName} gender={c.gender} size="md" />
                         <div>
                           <div style={{ fontWeight: "var(--font-weight-semibold)", color: "var(--text-primary)" }}>{c.fullName}</div>
                           {c.allergies && <AllergyBadge allergies={c.allergies} />}
@@ -689,6 +702,7 @@ export default function MasterlistPage() {
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => handleToggleSelect(c.id)}
+                          aria-label={`Select ${c.fullName}`}
                           style={{ cursor: "pointer", width: 16, height: 16 }}
                         />
                       </div>
@@ -715,9 +729,9 @@ export default function MasterlistPage() {
           groups={groups} rooms={rooms}
           candidates={candidates} connections={connections}
           onSave={handleSave} onDelete={handleDelete}
-          onAddConnection={addConnection} 
+          onAddConnection={addConnection}
           onUpdateConnection={updateConnection}
-          onConfirmConnection={confirmConnection} 
+          onConfirmConnection={confirmConnection}
           onDeleteConnection={deleteConnection}
           onClose={() => { setEditCandidate(null); setIsAddNew(false); }}
         />
@@ -850,19 +864,15 @@ function SortModal({ config, columns, onApply, onClear, onClose }: {
         </div>
         <div className="form-group">
           <label className="form-label">Direction</label>
-          <div style={{ display: "flex", gap: 2, background: "var(--bg-hover)", borderRadius: "var(--radius-sm)", padding: 3 }}>
-            {(["asc", "desc"] as const).map((d) => (
-              <button
-                key={d}
-                type="button"
-                className={`btn btn-sm ${dir === d ? "btn-primary" : "btn-ghost"}`}
-                style={{ padding: "4px 16px" }}
-                onClick={() => setDir(d)}
-              >
-                {d === "asc" ? "↑ Ascending" : "↓ Descending"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="Sort direction"
+            value={dir}
+            onChange={setDir}
+            options={[
+              { value: "asc", label: "↑ Ascending" },
+              { value: "desc", label: "↓ Descending" },
+            ]}
+          />
         </div>
       </div>
     </Modal>
@@ -904,7 +914,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
       const nameParts = fullName.split(",").map((s) => s.trim());
       const lastName = nameParts[0] ?? fullName;
       const firstName = nameParts[1] ?? "";
-      
+
       const genderRaw = getRaw(row, "gender").toUpperCase();
       let gender: Gender = "MALE";
       if (genderRaw.startsWith("F")) gender = "FEMALE";
@@ -931,7 +941,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
         motherName: getRaw(row, "motherName") || null,
         motherContact: getRaw(row, "motherContact") || null,
         allergies: getRaw(row, "allergies") || null,
-        shepherdNotes: null, 
+        shepherdNotes: null,
         isConfirmed,
         isPresent: false,
         groupId: null, roomId: null,
@@ -1017,10 +1027,10 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
             <p style={{ fontSize: "var(--font-size-xs)", fontWeight: 600, color: "var(--text-muted)", marginBottom: "var(--space-sm)", textTransform: "uppercase", letterSpacing: "0.025em" }}>
               File Preview (First 3 rows)
             </p>
-            <div style={{ overflowX: "auto", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", background: "var(--bg-hover)" }}>
+            <div style={{ overflowX: "auto", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", background: "var(--bg-hover)" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
                 <thead>
-                  <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                  <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
                     {headers.map((h) => (
                       <th key={h} style={{ textAlign: "left", padding: "6px 8px", background: "var(--bg-card)", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
@@ -1028,7 +1038,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
                 </thead>
                 <tbody>
                   {previewRows.map((row, i) => (
-                    <tr key={i} style={{ borderBottom: i < previewRows.length - 1 ? "1px solid var(--border-subtle)" : undefined }}>
+                    <tr key={i} style={{ borderBottom: i < previewRows.length - 1 ? "1px solid var(--border-color)" : undefined }}>
                       {headers.map((h) => (
                         <td key={h} style={{ padding: "6px 8px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>{String(row[h] ?? "")}</td>
                       ))}
@@ -1055,7 +1065,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
               </thead>
               <tbody>
                 {parsedCandidates.map((c, idx) => (
-                  <tr key={idx} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                  <tr key={idx} style={{ borderBottom: "1px solid var(--border-color)" }}>
                     <td style={{ padding: "var(--space-sm) var(--space-md)", color: "var(--text-primary)", fontWeight: 500 }}>{c.fullName}</td>
                     <td style={{ padding: "var(--space-sm) var(--space-md)" }}>
                       <select
@@ -1187,7 +1197,7 @@ function CandidateModal({
         Connections
         {confirmedConns.length > 0 && (
           <span style={{
-            marginLeft: 6, background: "var(--color-accent)", color: "#fff",
+            marginLeft: 6, background: "var(--color-accent)", color: "var(--text-on-primary)",
             borderRadius: 10, fontSize: "0.7em", padding: "1px 6px", fontWeight: 600,
           }}>
             {confirmedConns.length}
@@ -1196,7 +1206,7 @@ function CandidateModal({
         {pendingConns.length > 0 && (
           <span style={{
             marginLeft: 4, background: "var(--bg-hover)", color: "var(--text-secondary)",
-            border: "1px solid var(--border-default)",
+            border: "1px solid var(--border-color)",
             borderRadius: 10, fontSize: "0.7em", padding: "1px 6px", fontWeight: 600,
           }}>
             ?{pendingConns.length}
@@ -1213,7 +1223,7 @@ function CandidateModal({
     <Modal open title={isNew ? "Add Candidate" : initial.fullName} onClose={onClose} size="lg"
       footer={
         <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-          {!isNew && <button type="button" className="btn btn-danger" onClick={() => onDelete(form.id)}>
+          {!isNew && <button type="button" className="btn btn-danger-outline" onClick={() => onDelete(form.id)}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
               <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M9 6V4h6v2" />
             </svg>
@@ -1289,7 +1299,7 @@ function CandidateModal({
               {form.allergies && <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-warning)", marginTop: 2 }}>⚠ This will be flagged on the candidate card and in reports.</p>}
             </div>
 
-            <div className="form-group" style={{ marginTop: "var(--space-md)", background: "var(--bg-hover)", padding: "var(--space-md)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-default)" }}>
+            <div className="form-group" style={{ marginTop: "var(--space-md)", background: "var(--bg-hover)", padding: "var(--space-md)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
               <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
                 <input
                   type="checkbox"
@@ -1302,7 +1312,7 @@ function CandidateModal({
                 </span>
               </label>
               <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-secondary)", marginTop: 4, marginLeft: 26 }}>
-                Confirmed candidates appear with normal UI. Unconfirmed candidates will have a black outline in the grouping screens.
+                Unconfirmed candidates appear with a dashed outline on the Groups and Rooms boards.
               </p>
             </div>
           </div>
@@ -1345,21 +1355,22 @@ function CandidateModal({
                   {connSearchResults.length > 0 && (
                     <div style={{
                       position: "absolute", top: "calc(100% + 2px)", left: 0, right: 0,
-                      background: "var(--bg-card)", border: "1px solid var(--border-default)",
+                      background: "var(--bg-card)", border: "1px solid var(--border-color)",
                       borderRadius: "var(--radius-sm)", zIndex: 20,
                       maxHeight: 200, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                     }}>
                       {connSearchResults.map((c) => (
                         <div
                           key={c.id}
-                          onClick={() => { setConnSelectedId(c.id); setConnSearch(c.fullName); }}
+                          {...pressable(() => { setConnSelectedId(c.id); setConnSearch(c.fullName); })}
+                          aria-pressed={connSelectedId === c.id}
                           style={{
                             padding: "var(--space-sm) var(--space-md)", cursor: "pointer",
                             background: connSelectedId === c.id ? "var(--bg-hover)" : "transparent",
                             display: "flex", alignItems: "center", gap: "var(--space-sm)",
                           }}
                         >
-                          <Initials name={c.fullName} gender={c.gender} size={28} />
+                          <Initials name={c.fullName} gender={c.gender} size="md" />
                           <div>
                             <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 500 }}>{c.fullName}</div>
                             {c.school && <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{c.school}</div>}
@@ -1425,17 +1436,17 @@ function CandidateModal({
                       background: isPending
                         ? "color-mix(in srgb, var(--color-warning) 6%, var(--bg-hover))"
                         : "var(--bg-hover)",
-                      border: isPending ? "1px dashed var(--border-default)" : "1px solid transparent",
+                      border: isPending ? "1px dashed var(--border-color)" : "1px solid transparent",
                       borderRadius: "var(--radius-sm)",
                       opacity: isPending ? 0.85 : 1,
                     }}
                   >
                     <div style={{ position: "relative" }}>
-                      <Initials name={otherName ?? "?"} gender={other?.gender ?? "MALE"} size={28} />
+                      <Initials name={otherName ?? "?"} gender={other?.gender ?? "MALE"} size="md" />
                       {isPending && (
                         <span style={{
                           position: "absolute", bottom: -2, right: -2,
-                          background: "var(--color-warning)", color: "#fff",
+                          background: "var(--color-warning)", color: "var(--text-on-primary)",
                           borderRadius: "50%", width: 12, height: 12,
                           fontSize: 9, fontWeight: 700, display: "flex",
                           alignItems: "center", justifyContent: "center", lineHeight: 1,
@@ -1471,7 +1482,7 @@ function CandidateModal({
                           </button>
                           <button
                             type="button"
-                            title="Dismiss connection"
+                            title="Dismiss connection" aria-label="Dismiss connection"
                             onClick={() => onDeleteConnection(conn.id)}
                             style={{
                               background: "none", border: "none", cursor: "pointer",
@@ -1492,7 +1503,7 @@ function CandidateModal({
                             type="button"
                             className="btn btn-sm btn-ghost"
                             onClick={() => setEditConn(conn)}
-                            title="Edit connection"
+                            title="Edit connection" aria-label="Edit connection"
                             style={{ padding: 4, display: "flex", alignItems: "center" }}
                           >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -1501,7 +1512,7 @@ function CandidateModal({
                           </button>
                           <button
                             type="button"
-                            title="Remove connection"
+                            title="Remove connection" aria-label="Remove connection"
                             onClick={() => {
                               if (confirm(`Delete connection with ${otherName}?`)) {
                                 onDeleteConnection(conn.id);
@@ -1568,10 +1579,10 @@ function CandidateModal({
                 <select
                   className="input"
                   value={editConn.relationshipType}
-                  onChange={(e) => setEditConn({ 
-                    ...editConn, 
+                  onChange={(e) => setEditConn({
+                    ...editConn,
                     relationshipType: e.target.value as any,
-                    source: "MANUAL" 
+                    source: "MANUAL"
                   })}
                 >
                   <option value="BARKADA">Barkada / Friend</option>

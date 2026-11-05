@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { hmac } from "@/lib/crypto";
 
 import { encrypt } from "@/lib/crypto";
+import { conflictResponse, findConflictingFields, splitBase } from "@/lib/sync-conflicts";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await requireOrgSession();
@@ -24,13 +25,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const session = await requireOrgSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
+  const { base, body } = splitBase(await req.json());
   try {
     // Verify ownership before update
     const existing = await prisma.candidate.findFirst({
       where: { id: params.id, event: { orgId: session.orgId } },
     });
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const conflicts = findConflictingFields(existing as unknown as Record<string, unknown>, body, base);
+    if (conflicts.length) return conflictResponse(conflicts, existing as unknown as Record<string, unknown>);
 
     // Pick only valid database fields to prevent Prisma errors
     const data: any = {};
@@ -51,7 +55,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (body.facebook !== undefined)      data.facebookEnc = body.facebook ? encrypt(body.facebook) : null;
     if (body.allergies !== undefined)     data.allergiesEnc = body.allergies ? encrypt(body.allergies) : null;
     if (body.shepherdNotes !== undefined) data.shepherdNotesEnc = body.shepherdNotes ? encrypt(body.shepherdNotes) : null;
-    
+
     if (body.fatherName !== undefined)    data.fatherNameEnc = body.fatherName ? encrypt(body.fatherName) : null;
     if (body.fatherContact !== undefined) data.fatherContactEnc = body.fatherContact ? encrypt(body.fatherContact) : null;
     if (body.motherName !== undefined)    data.motherNameEnc = body.motherName ? encrypt(body.motherName) : null;

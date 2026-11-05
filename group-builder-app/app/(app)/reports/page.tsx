@@ -226,8 +226,8 @@ export default function ReportsPage() {
                     <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{members.length} members · {batch.name}</div>
                   </div>
                   <div style={{ display: "flex", gap: "var(--space-xs)" }}>
-                    <Chip kind="accent">{members.filter((m) => m.gender === "MALE").length} ♂</Chip>
-                    <Chip kind={members.filter((m) => m.gender === "FEMALE").length > 0 ? "default" : "default"}>{members.filter((m) => m.gender === "FEMALE").length} ♀</Chip>
+                    <Chip kind="male">{members.filter((m) => m.gender === "MALE").length} ♂</Chip>
+                    <Chip kind="female">{members.filter((m) => m.gender === "FEMALE").length} ♀</Chip>
                   </div>
                 </div>
                 <div style={{ overflowX: "auto" }}>
@@ -247,7 +247,7 @@ export default function ReportsPage() {
                           <tr key={m.id}>
                             <td>
                               <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
-                                <Initials name={m.fullName} gender={m.gender} size={20} fontSize={8} />
+                                <Initials name={m.fullName} gender={m.gender} size="sm" />
                                 <span style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)" }}>{m.fullName}</span>
                               </div>
                             </td>
@@ -281,14 +281,14 @@ export default function ReportsPage() {
                     <div style={{ fontWeight: "var(--font-weight-bold)" }}>{room.name}</div>
                     <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{room.floor ?? ""} · {room.bedCount} beds</div>
                   </div>
-                  <GenderChip gender={room.gender === "MIXED" ? "MALE" : room.gender as "MALE" | "FEMALE"} />
+                  <GenderChip gender={room.gender} />
                 </div>
                 <div style={{ padding: "var(--space-sm)" }}>
                   {members.map((m) => {
                     const group = groups.find((g) => g.id === m.groupId);
                     return (
                       <div key={m.id} style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", padding: "6px 8px", borderBottom: "1px solid var(--border-color)" }}>
-                        <Initials name={m.fullName} gender={m.gender} size={24} fontSize={10} />
+                        <Initials name={m.fullName} gender={m.gender} size="md" />
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)" }}>{m.fullName}</div>
                           <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{m.age ? `Age ${m.age}` : ""}{group ? ` · ${group.name}` : ""}</div>
@@ -374,7 +374,7 @@ export default function ReportsPage() {
                   <tr key={c.id}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-                        <Initials name={c.fullName} gender={c.gender} size={24} fontSize={10} />
+                        <Initials name={c.fullName} gender={c.gender} size="md" />
                         <span style={{ fontWeight: "var(--font-weight-medium)" }}>{c.fullName}</span>
                       </div>
                     </td>
@@ -416,7 +416,7 @@ export default function ReportsPage() {
                   <tr key={c.id}>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-                        <Initials name={c.fullName} gender={c.gender} size={24} fontSize={10} />
+                        <Initials name={c.fullName} gender={c.gender} size="md" />
                         <span style={{ fontWeight: "var(--font-weight-medium)" }}>{c.fullName}</span>
                       </div>
                     </td>

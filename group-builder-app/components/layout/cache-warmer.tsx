@@ -9,6 +9,7 @@ const APP_ROUTES = [
   "/groups",
   "/rooms",
   "/reports",
+  "/events",
 ];
 
 // Silently pre-fetches every app route so the service worker caches their HTML.

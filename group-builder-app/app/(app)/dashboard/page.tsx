@@ -2,12 +2,14 @@
 
 import { useMemo } from "react";
 import { useApp } from "@/lib/store";
+import { PageSkeleton } from "@/components/ui/skeleton";
 import DonutChart from "@/components/ui/donut-chart";
 import { formatRelativeTime, pluralize } from "@/lib/utils";
 import { Chip } from "@/components/ui/chip";
+import { WarningIcon } from "@/components/ui/icons";
 
 export default function DashboardPage() {
-  const { candidates, groups, rooms, activities, allConflicts, event: batch } = useApp();
+  const { candidates, groups, rooms, activities, allConflicts, event: batch, dataReady } = useApp();
 
   const stats = useMemo(() => {
     const total = candidates.length;
@@ -31,6 +33,20 @@ export default function DashboardPage() {
   const roomConflictCount = allConflicts.filter((c) => c.roomId).length;
 
   const maxAge = Math.max(...stats.ageDistribution.map((a) => a.count), 1);
+
+
+  if (!dataReady) {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Dashboard</h1>
+          </div>
+        </div>
+        <PageSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -132,10 +148,7 @@ export default function DashboardPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
                 {groupConflictCount > 0 && (
                   <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", padding: "var(--space-sm) var(--space-md)", background: "var(--color-conflict-bg)", border: "1px solid var(--color-conflict-border)", borderRadius: "var(--radius-md)" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-danger)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                      <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-                    </svg>
+                    <WarningIcon size={14} style={{ color: "var(--color-danger)" }} />
                     <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-conflict-text)", fontWeight: "var(--font-weight-medium)" }}>
                       {pluralize(groupConflictCount, "group conflict")}
                     </span>
@@ -143,10 +156,7 @@ export default function DashboardPage() {
                 )}
                 {roomConflictCount > 0 && (
                   <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", padding: "var(--space-sm) var(--space-md)", background: "var(--color-conflict-bg)", border: "1px solid var(--color-conflict-border)", borderRadius: "var(--radius-md)" }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-danger)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                      <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-                    </svg>
+                    <WarningIcon size={14} style={{ color: "var(--color-danger)" }} />
                     <span style={{ fontSize: "var(--font-size-sm)", color: "var(--color-conflict-text)", fontWeight: "var(--font-weight-medium)" }}>
                       {pluralize(roomConflictCount, "room conflict")}
                     </span>
@@ -212,10 +222,7 @@ function StatTile({ label, value, sub, color, alert }: {
       {sub && <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", marginTop: 2 }}>{sub}</div>}
       {alert && (
         <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: "var(--space-xs)" }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-danger)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-            <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
+          <WarningIcon size={12} style={{ color: "var(--color-danger)" }} />
           <span style={{ fontSize: "var(--font-size-xs)", color: "var(--color-danger)" }}>Needs attention</span>
         </div>
       )}

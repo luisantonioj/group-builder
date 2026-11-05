@@ -98,6 +98,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
 
+  // Idempotent create: a retried offline create returns the row it already made.
+  if (prismaData.id) {
+    const already = await prisma.candidate.findFirst({
+      where: { id: prismaData.id, event: { orgId: session.orgId } },
+    });
+    if (already) return NextResponse.json({ data: already }, { status: 200 });
+  }
+
   const contactHash = contact ? hmac(contact) : undefined;
 
   // Check for duplicate within the same org
