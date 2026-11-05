@@ -7,6 +7,7 @@ import SearchInput from "@/components/ui/search-input";
 import { Chip, GenderChip, AllergyBadge } from "@/components/ui/chip";
 import Modal from "@/components/ui/modal";
 import Initials from "@/components/ui/initials";
+import SegmentedControl from "@/components/ui/segmented-control";
 import { formatConnectionLabel } from "@/lib/utils";
 import type { Candidate, Connection, Gender, RelationshipType } from "@/types";
 
@@ -376,7 +377,7 @@ export default function MasterlistPage() {
     for (const c of parsed) {
       const nameKey = normName(c.fullName);
       const contactKey = c.contact ? normContact(c.contact) : null;
-      
+
       // Check if duplicate within this file
       if (seenNamesInFile.has(nameKey) || (contactKey && seenContactsInFile.has(contactKey))) {
          skippedDupes.push(c.fullName);
@@ -452,7 +453,7 @@ export default function MasterlistPage() {
     if (freshCandidates.length > 0) {
       importCandidates(freshCandidates);
     }
-    
+
     // Update local store with modified candidates
     for (const uc of updatedCandidates) {
       updateCandidate(uc);
@@ -464,12 +465,12 @@ export default function MasterlistPage() {
     const created = freshCandidates.length;
     const updated = updatedCandidates.length;
     const dupes = skippedDupes.length;
-    
+
     const parts = [];
     if (created > 0) parts.push(`${created} imported`);
     if (updated > 0) parts.push(`${updated} updated`);
     if (dupes > 0) parts.push(`${dupes} skipped`);
-    
+
     showToast(parts.join(" · "), "success");
   }
 
@@ -523,38 +524,43 @@ export default function MasterlistPage() {
         <SearchInput value={search} onChange={setSearch} placeholder="Search name, school, inviter…" />
 
         {/* Gender toggle */}
-        <div style={{ display: "flex", gap: 2, background: "var(--bg-hover)", borderRadius: "var(--radius-sm)", padding: 3 }}>
-          {(["ALL", "MALE", "FEMALE"] as const).map((v) => (
-            <button key={v} onClick={() => setGenderFilter(v)} className={`btn btn-sm ${genderFilter === v ? "btn-primary" : "btn-ghost"}`} style={{ padding: "4px 10px" }}>
-              {v === "ALL" ? "All" : v === "MALE" ? "♂ Male" : "♀ Female"}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Filter by gender"
+          value={genderFilter}
+          onChange={setGenderFilter}
+          options={[
+            { value: "ALL", label: "All" },
+            { value: "MALE", label: "♂ Male" },
+            { value: "FEMALE", label: "♀ Female" },
+          ]}
+        />
 
         {/* Status toggle */}
-        <div style={{ display: "flex", gap: 2, background: "var(--bg-hover)", borderRadius: "var(--radius-sm)", padding: 3 }}>
-          {(["ALL", "GROUPED", "UNGROUPED"] as const).map((v) => (
-            <button key={v} onClick={() => setStatusFilter(v)} className={`btn btn-sm ${statusFilter === v ? "btn-primary" : "btn-ghost"}`} style={{ padding: "4px 10px" }}>
-              {v.charAt(0) + v.slice(1).toLowerCase()}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Filter by group status"
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={[
+            { value: "ALL", label: "All" },
+            { value: "GROUPED", label: "Grouped" },
+            { value: "UNGROUPED", label: "Ungrouped" },
+          ]}
+        />
 
         {/* Right-side controls */}
         <div style={{ display: "flex", gap: "var(--space-sm)", alignItems: "center", marginLeft: "auto", flexWrap: "wrap" }}>
           {/* Active sort chip */}
           {sortConfig && activeSortLabel && (
-            <div
-              style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--bg-hover)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", padding: "3px 8px", fontSize: "var(--font-size-xs)", cursor: "pointer" }}
-              onClick={() => setSortModalOpen(true)}
-            >
-              <span style={{ color: "var(--text-secondary)" }}>
-                {activeSortLabel} {sortConfig.dir === "asc" ? "↑" : "↓"}
-              </span>
-              <span
-                onClick={(e) => { e.stopPropagation(); setSortConfig(null); }}
-                style={{ marginLeft: 2, color: "var(--text-muted)", cursor: "pointer", lineHeight: 1, fontWeight: "bold" }}
-              >×</span>
+            <div className="sort-chip">
+              <button type="button" className="sort-chip-label" onClick={() => setSortModalOpen(true)}>
+                Sorted by {activeSortLabel} {sortConfig.dir === "asc" ? "↑" : "↓"}
+              </button>
+              <button
+                type="button"
+                className="sort-chip-clear"
+                aria-label="Clear sort"
+                onClick={() => setSortConfig(null)}
+              >×</button>
             </div>
           )}
 
@@ -705,9 +711,9 @@ export default function MasterlistPage() {
           groups={groups} rooms={rooms}
           candidates={candidates} connections={connections}
           onSave={handleSave} onDelete={handleDelete}
-          onAddConnection={addConnection} 
+          onAddConnection={addConnection}
           onUpdateConnection={updateConnection}
-          onConfirmConnection={confirmConnection} 
+          onConfirmConnection={confirmConnection}
           onDeleteConnection={deleteConnection}
           onClose={() => { setEditCandidate(null); setIsAddNew(false); }}
         />
@@ -840,19 +846,15 @@ function SortModal({ config, columns, onApply, onClear, onClose }: {
         </div>
         <div className="form-group">
           <label className="form-label">Direction</label>
-          <div style={{ display: "flex", gap: 2, background: "var(--bg-hover)", borderRadius: "var(--radius-sm)", padding: 3 }}>
-            {(["asc", "desc"] as const).map((d) => (
-              <button
-                key={d}
-                type="button"
-                className={`btn btn-sm ${dir === d ? "btn-primary" : "btn-ghost"}`}
-                style={{ padding: "4px 16px" }}
-                onClick={() => setDir(d)}
-              >
-                {d === "asc" ? "↑ Ascending" : "↓ Descending"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="Sort direction"
+            value={dir}
+            onChange={setDir}
+            options={[
+              { value: "asc", label: "↑ Ascending" },
+              { value: "desc", label: "↓ Descending" },
+            ]}
+          />
         </div>
       </div>
     </Modal>
@@ -894,7 +896,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
       const nameParts = fullName.split(",").map((s) => s.trim());
       const lastName = nameParts[0] ?? fullName;
       const firstName = nameParts[1] ?? "";
-      
+
       const genderRaw = getRaw(row, "gender").toUpperCase();
       let gender: Gender = "MALE";
       if (genderRaw.startsWith("F")) gender = "FEMALE";
@@ -921,7 +923,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
         motherName: getRaw(row, "motherName") || null,
         motherContact: getRaw(row, "motherContact") || null,
         allergies: getRaw(row, "allergies") || null,
-        shepherdNotes: null, 
+        shepherdNotes: null,
         isConfirmed,
         isPresent: false,
         groupId: null, roomId: null,
@@ -1292,7 +1294,7 @@ function CandidateModal({
                 </span>
               </label>
               <p style={{ fontSize: "var(--font-size-xs)", color: "var(--text-secondary)", marginTop: 4, marginLeft: 26 }}>
-                Confirmed candidates appear with normal UI. Unconfirmed candidates will have a black outline in the grouping screens.
+                Unconfirmed candidates appear with a dashed outline on the Groups and Rooms boards.
               </p>
             </div>
           </div>
@@ -1558,10 +1560,10 @@ function CandidateModal({
                 <select
                   className="input"
                   value={editConn.relationshipType}
-                  onChange={(e) => setEditConn({ 
-                    ...editConn, 
+                  onChange={(e) => setEditConn({
+                    ...editConn,
                     relationshipType: e.target.value as any,
-                    source: "MANUAL" 
+                    source: "MANUAL"
                   })}
                 >
                   <option value="BARKADA">Barkada / Friend</option>
