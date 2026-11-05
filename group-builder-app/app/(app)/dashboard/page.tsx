@@ -2,13 +2,14 @@
 
 import { useMemo } from "react";
 import { useApp } from "@/lib/store";
+import { PageSkeleton } from "@/components/ui/skeleton";
 import DonutChart from "@/components/ui/donut-chart";
 import { formatRelativeTime, pluralize } from "@/lib/utils";
 import { Chip } from "@/components/ui/chip";
 import { WarningIcon } from "@/components/ui/icons";
 
 export default function DashboardPage() {
-  const { candidates, groups, rooms, activities, allConflicts, event: batch } = useApp();
+  const { candidates, groups, rooms, activities, allConflicts, event: batch, dataReady } = useApp();
 
   const stats = useMemo(() => {
     const total = candidates.length;
@@ -32,6 +33,20 @@ export default function DashboardPage() {
   const roomConflictCount = allConflicts.filter((c) => c.roomId).length;
 
   const maxAge = Math.max(...stats.ageDistribution.map((a) => a.count), 1);
+
+
+  if (!dataReady) {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Dashboard</h1>
+          </div>
+        </div>
+        <PageSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div>

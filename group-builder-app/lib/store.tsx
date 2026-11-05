@@ -12,6 +12,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from "react";
 import { getMockInitialState } from "./mock-data";
 import {
@@ -247,6 +248,8 @@ function buildInitialState(initialEvent: Event | null): AppState {
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 interface AppContextValue extends AppState {
+  /** False until the first local (IndexedDB) or server read for the active event finishes. */
+  dataReady: boolean;
   // Derived
   adjacency: Map<string, Set<string>>;
   groupConflicts: Omit<Conflict, "id" | "createdAt">[];
@@ -358,6 +361,7 @@ export function AppProvider({
   // Latest state for mutations that need the "before" values (diffs + conflict bases).
   const stateRef = useRef(state);
   stateRef.current = state;
+  const [dataReady, setDataReady] = useState(!initialEvent);
 
   const autoConnections = useMemo(
     () => deriveAutoConnections(state.candidates),
@@ -417,6 +421,7 @@ export function AppProvider({
   }, [currentUser]);
 
   const setEvent = useCallback((event: Event) => {
+    setDataReady(!event.id);
     dispatch({ type: "SET_EVENT", payload: event });
   }, []);
 
@@ -429,17 +434,24 @@ export function AppProvider({
           type: "SET_APP_DATA",
           payload: localData,
         });
+        setDataReady(true);
       }
     } catch {
       // Ignore Dexie errors
     }
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setDataReady(true);
+      return;
+    }
 
     // Don't overwrite optimistic local edits that haven't reached the server yet.
     // Failed / conflicting items don't block; they're surfaced in the sync panel instead.
     const pendingLocalWrites = await countPendingWrites().catch(() => 0);
-    if (pendingLocalWrites > 0) return;
+    if (pendingLocalWrites > 0) {
+      setDataReady(true);
+      return;
+    }
 
     // 2. Then, fetch from the server to ensure we have the latest data
     try {
@@ -482,6 +494,8 @@ export function AppProvider({
       }
     } catch {
       // Silently ignore network errors — app stays with Dexie data
+    } finally {
+      setDataReady(true);
     }
   }, []);
 
@@ -893,6 +907,7 @@ export function AppProvider({
 
   const value: AppContextValue = {
     ...state,
+    dataReady,
     connections: allConnections,
     adjacency,
     groupConflicts,

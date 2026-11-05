@@ -43,6 +43,7 @@ export default async function AppLayout({
 
   // Load the active or most-recent event for this org
   let initialEvent: Event | null = null;
+  let dbReachable = true;
   try {
     const dbEvent = await prisma.event.findFirst({
       where: { orgId: user.orgId, isActive: true },
@@ -62,11 +63,13 @@ export default async function AppLayout({
       };
     }
   } catch {
-    // DB not configured — initialEvent stays null, store falls back to mock in dev
+    // DB not configured / unreachable — initialEvent stays null, store falls back to mock in dev
+    dbReachable = false;
   }
 
-  // Admins with no events must create one first (onboarding flow)
-  if (!initialEvent && user.role === "ADMIN") {
+  // Admins with no events must create one first (onboarding flow).
+  // Only when the DB actually answered — an outage shouldn't send admins to onboarding.
+  if (!initialEvent && dbReachable && user.role === "ADMIN") {
     redirect("/events/setup?onboarding=true");
   }
 

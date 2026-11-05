@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useApp } from "@/lib/store";
+import { BoardSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { Chip, GenderChip } from "@/components/ui/chip";
 import Modal from "@/components/ui/modal";
@@ -48,7 +49,7 @@ function roomMeta(c: Candidate, groups: { id: string; name: string }[]) {
 type GenderTab = "MALE" | "FEMALE";
 
 export default function RoomsPage() {
-  const { candidates, connections, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom, updateRoom, deleteRoom, event, updateCandidate } = useApp();
+  const { candidates, connections, rooms, groups, adjacency, roomConflicts, assignToRoom, addRoom, updateRoom, deleteRoom, event, updateCandidate, dataReady } = useApp();
   const { showToast } = useToast();
 
   const [genderTab, setGenderTab] = useState<GenderTab>("MALE");
@@ -188,6 +189,20 @@ export default function RoomsPage() {
       setEditRoomData(null);
       showToast("Room deleted", "success");
     }
+  }
+
+
+  if (!dataReady) {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Room Assignment</h1>
+          </div>
+        </div>
+        <BoardSkeleton cards={4} />
+      </div>
+    );
   }
 
   return (

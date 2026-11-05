@@ -24,6 +24,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useApp } from "@/lib/store";
+import { BoardSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import SearchInput from "@/components/ui/search-input";
 import { Chip } from "@/components/ui/chip";
@@ -57,7 +58,7 @@ const GENDER_OPTIONS = [
 
 
 export default function GroupsPage() {
-  const { candidates, connections, groups, adjacency, groupConflicts, assignToGroup, updateCandidate, autoDistribute, clearAllGroups, addGroup, deleteGroup, updateGroup, lockGroup, reorderGroups, event } = useApp();
+  const { candidates, connections, groups, adjacency, groupConflicts, assignToGroup, updateCandidate, autoDistribute, clearAllGroups, addGroup, deleteGroup, updateGroup, lockGroup, reorderGroups, event, dataReady } = useApp();
   const { showToast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -272,6 +273,20 @@ export default function GroupsPage() {
 
   const totalAssigned = candidates.filter((c) => c.groupId).length;
   const totalConflicts = groupConflicts.length;
+
+
+  if (!dataReady) {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Group Formation</h1>
+          </div>
+        </div>
+        <BoardSkeleton />
+      </div>
+    );
+  }
 
   return (
     <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useRef } from "react";
 import { useApp } from "@/lib/store";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import SearchInput from "@/components/ui/search-input";
 import { Chip, GenderChip, AllergyBadge } from "@/components/ui/chip";
@@ -110,7 +111,7 @@ interface ImportModalData {
 }
 
 export default function MasterlistPage() {
-  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, deleteCandidates, importCandidates, addConnection, updateConnection, confirmConnection, deleteConnection, event: batch } = useApp();
+  const { candidates, groups, rooms, connections, addCandidate, updateCandidate, deleteCandidate, deleteCandidates, importCandidates, addConnection, updateConnection, confirmConnection, deleteConnection, event: batch, dataReady } = useApp();
   const { showToast } = useToast();
 
   // Filters
@@ -479,6 +480,20 @@ export default function MasterlistPage() {
 
   const totalCols = 8 + activeExtraCols.length;
   const activeSortLabel = sortConfig ? sortCols.find((c) => c.key === sortConfig.key)?.label ?? sortConfig.key : null;
+
+
+  if (!dataReady) {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Masterlist</h1>
+          </div>
+        </div>
+        <TableSkeleton rows={10} />
+      </div>
+    );
+  }
 
   return (
     <div>

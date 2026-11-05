@@ -88,20 +88,7 @@ export default function Topbar() {
           {event.name} · {event.isActive ? "Active" : "Inactive"}
         </span>
         {event.isActive && (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              background: "#f0fdf4",
-              color: "var(--color-success)",
-              border: "1px solid #bbf7d0",
-              borderRadius: "var(--radius-full)",
-              padding: "2px 8px",
-              fontSize: "var(--font-size-xs)",
-              fontWeight: "var(--font-weight-semibold)",
-            }}
-          >
+          <span className="chip chip-success" style={{ padding: "2px 8px", border: "1px solid currentColor", borderColor: "color-mix(in srgb, currentColor 35%, transparent)" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--color-success)", display: "inline-block" }} />
             Active
           </span>
