@@ -403,7 +403,7 @@ export default function GroupsPage() {
         })()}
         {!activeDragIsGroup && activeDragCandidate && (
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--color-primary)", borderRadius: "var(--radius-md)", padding: "8px 12px", boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: "var(--space-sm)", fontSize: "var(--font-size-sm)", width: 220, opacity: 0.95 }}>
-            <Initials name={activeDragCandidate.fullName} gender={activeDragCandidate.gender} size={28} />
+            <Initials name={activeDragCandidate.fullName} gender={activeDragCandidate.gender} size="md" />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: "var(--font-weight-semibold)" }}>{activeDragCandidate.fullName}</div>
               <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
@@ -444,7 +444,7 @@ export default function GroupsPage() {
               </button>
               <button
                 className="btn btn-secondary"
-                style={{ justifyContent: "flex-start", textAlign: "left", color: "var(--color-danger, #e74c3c)" }}
+                style={{ justifyContent: "flex-start", textAlign: "left", color: "var(--color-danger)" }}
                 onClick={() => setKeepExisting(false)}
               >
                 Delete all existing groups and start fresh
@@ -509,7 +509,7 @@ export default function GroupsPage() {
       <Modal open={editGroupOpen} title="Edit Group" onClose={() => { setEditGroupOpen(false); setEditGroupData(null); }}
         footer={
           <div style={{ display: "flex", width: "100%", justifyContent: "space-between" }}>
-            <button className="btn" style={{ color: "var(--color-danger)" }} onClick={handleDeleteGroup}>Delete Group</button>
+            <button className="btn btn-danger-outline" onClick={handleDeleteGroup}>Delete Group</button>
             <div style={{ display: "flex", gap: "var(--space-sm)" }}>
               <button className="btn btn-secondary" onClick={() => { setEditGroupOpen(false); setEditGroupData(null); }}>Cancel</button>
               <button className="btn btn-primary" onClick={handleEditGroup}>Save Changes</button>
@@ -587,7 +587,7 @@ function DraggableCard({ candidate: c, adjacency }: { candidate: Candidate; adja
         boxShadow: "none",
       }}
     >
-      <Initials name={c.fullName} gender={c.gender} size={26} fontSize={10} />
+      <Initials name={c.fullName} gender={c.gender} size="md" />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.fullName}</div>
         <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{c.age !== null ? `Age: ${c.age}` : "Age unknown"}</div>
@@ -627,7 +627,7 @@ function DraggableMember({ candidate: m, isConflict, isLocked, onTogglePresence 
         boxShadow: "none",
       }}
     >
-      <Initials name={m.fullName} gender={m.gender} size={22} fontSize={9} />
+      <Initials name={m.fullName} gender={m.gender} size="sm" />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", color: isConflict ? "var(--color-conflict-text)" : "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {m.fullName}{isConflict && " ⚠"}

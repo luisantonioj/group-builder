@@ -3,30 +3,50 @@
  * All colors, spacing, and typography live here.
  * To change the look of the entire app, edit only this file.
  * Components reference these variables — no hardcoded hex values in components.
+ *
+ * Dark tokens are defined once below and emitted twice by design:
+ * for an explicit [data-theme="dark"] and for the OS preference when no theme is saved.
  */
 
 /* ─── Light Mode (default) ──────────────────────────────────────────────────── */
 :root {
+  color-scheme: light;
+
   /* Brand colors */
   --color-primary:       #2e86c1;
   --color-primary-hover: #1a6fa0;
+  --color-primary-ring:  rgba(46, 134, 193, 0.35);
   --color-accent:        #2e86c1;
+  --color-accent-bg:     #eff6ff;
   --color-danger:        #dc2626;
   --color-danger-hover:  #b91c1c;
   --color-warning:       #d97706;
+  --color-warning-bg:    #fffbeb;
+  --color-warning-text:  #b45309;
   --color-success:       #16a34a;
+  --color-success-bg:    #f0fdf4;
+  --color-success-text:  #15803d;
 
   /* Gender indicators — used consistently everywhere */
   --color-male:          #3b82f6;
+  --color-male-strong:   #1d4ed8;
   --color-male-bg:       #eff6ff;
+  --color-male-text:     #1d4ed8;
   --color-female:        #ec4899;
+  --color-female-strong: #be185d;
   --color-female-bg:     #fdf2f8;
+  --color-female-text:   #be185d;
+  --color-mixed:         #7c3aed;
+  --color-mixed-bg:      #f5f3ff;
+  --color-mixed-text:    #6d28d9;
 
   /* Conflict / allergy severity */
   --color-conflict-bg:     #fef2f2;
   --color-conflict-border: #fca5a5;
-  --color-conflict-text:   #dc2626;
-  --color-allergy-badge:   #f97316;
+  --color-conflict-text:   #b91c1c;
+  --color-allergy-badge:   #c2410c;
+  --color-allergy-bg:      #fff7ed;
+  --color-allergy-border:  #fed7aa;
 
   /* Surfaces */
   --bg-page:      #f4f6f9;
@@ -36,13 +56,18 @@
   --bg-input:     #ffffff;
   --bg-hover:     #f1f5f9;
   --bg-selected:  #eff6ff;
+  --bg-item:      #f8fafc; /* name cards inside a white card */
   --border-color: #e2e8f0;
+  --border-strong: #94a3b8;
   --border-focus: #2e86c1;
+  /* Aliases kept for older inline styles */
+  --border-default: var(--border-color);
+  --border-subtle:  var(--border-color);
 
   /* Text */
   --text-primary:    #0f172a;
   --text-secondary:  #475569;
-  --text-muted:      #94a3b8;
+  --text-muted:      #64748b; /* ≥4.5:1 on white */
   --text-on-primary: #ffffff;
   --text-on-dark:    #f1f5f9;
   --text-sidebar:    #cbd5e1;
@@ -79,6 +104,11 @@
   --radius-xl: 16px;
   --radius-full: 9999px;
 
+  /* Avatar sizes */
+  --avatar-sm: 22px;
+  --avatar-md: 28px;
+  --avatar-lg: 32px;
+
   /* Shadows */
   --shadow-sm:  0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-md:  0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
@@ -98,23 +128,40 @@
 
 /* ─── Dark Mode ──────────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
+  color-scheme: dark;
+
   --color-primary:       #3b9dd4;
   --color-primary-hover: #2e86c1;
+  --color-primary-ring:  rgba(59, 157, 212, 0.45);
   --color-accent:        #3b9dd4;
+  --color-accent-bg:     #1e3a5f;
   --color-danger:        #f87171;
   --color-danger-hover:  #ef4444;
   --color-warning:       #fbbf24;
+  --color-warning-bg:    #2d1f00;
+  --color-warning-text:  #fcd34d;
   --color-success:       #4ade80;
+  --color-success-bg:    #052e16;
+  --color-success-text:  #86efac;
 
   --color-male:          #60a5fa;
+  --color-male-strong:   #2563eb;
   --color-male-bg:       #1e3a5f;
+  --color-male-text:     #93c5fd;
   --color-female:        #f472b6;
+  --color-female-strong: #db2777;
   --color-female-bg:     #4a1942;
+  --color-female-text:   #f9a8d4;
+  --color-mixed:         #a78bfa;
+  --color-mixed-bg:      #2e1065;
+  --color-mixed-text:    #c4b5fd;
 
   --color-conflict-bg:     #2d1515;
   --color-conflict-border: #7f1d1d;
-  --color-conflict-text:   #f87171;
-  --color-allergy-badge:   #fb923c;
+  --color-conflict-text:   #fca5a5;
+  --color-allergy-badge:   #fdba74;
+  --color-allergy-bg:      #2c1606;
+  --color-allergy-border:  #7c2d12;
 
   --bg-page:      #0b1120;
   --bg-card:      #111827;
@@ -123,12 +170,14 @@
   --bg-input:     #1f2937;
   --bg-hover:     #1f2937;
   --bg-selected:  #1e3a5f;
-  --border-color: #1f2937;
+  --bg-item:      #172033;
+  --border-color: #334155; /* distinct from hover/input/modal surfaces */
+  --border-strong: #64748b;
   --border-focus: #3b9dd4;
 
   --text-primary:    #f1f5f9;
-  --text-secondary:  #94a3b8;
-  --text-muted:      #64748b;
+  --text-secondary:  #a3b1c6;
+  --text-muted:      #8b9ab0; /* ≥4.5:1 on --bg-card */
   --text-on-primary: #ffffff;
   --text-on-dark:    #f1f5f9;
   --text-sidebar:    #94a3b8;
@@ -143,21 +192,41 @@
 /* Auto dark mode — before user has set a preference */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
     --color-primary:       #3b9dd4;
     --color-primary-hover: #2e86c1;
+    --color-primary-ring:  rgba(59, 157, 212, 0.45);
     --color-accent:        #3b9dd4;
+    --color-accent-bg:     #1e3a5f;
     --color-danger:        #f87171;
     --color-danger-hover:  #ef4444;
     --color-warning:       #fbbf24;
+    --color-warning-bg:    #2d1f00;
+    --color-warning-text:  #fcd34d;
     --color-success:       #4ade80;
+    --color-success-bg:    #052e16;
+    --color-success-text:  #86efac;
+
     --color-male:          #60a5fa;
+    --color-male-strong:   #2563eb;
     --color-male-bg:       #1e3a5f;
+    --color-male-text:     #93c5fd;
     --color-female:        #f472b6;
+    --color-female-strong: #db2777;
     --color-female-bg:     #4a1942;
+    --color-female-text:   #f9a8d4;
+    --color-mixed:         #a78bfa;
+    --color-mixed-bg:      #2e1065;
+    --color-mixed-text:    #c4b5fd;
+
     --color-conflict-bg:     #2d1515;
     --color-conflict-border: #7f1d1d;
-    --color-conflict-text:   #f87171;
-    --color-allergy-badge:   #fb923c;
+    --color-conflict-text:   #fca5a5;
+    --color-allergy-badge:   #fdba74;
+    --color-allergy-bg:      #2c1606;
+    --color-allergy-border:  #7c2d12;
+
     --bg-page:      #0b1120;
     --bg-card:      #111827;
     --bg-sidebar:   #080e1a;
@@ -165,13 +234,19 @@
     --bg-input:     #1f2937;
     --bg-hover:     #1f2937;
     --bg-selected:  #1e3a5f;
-    --border-color: #1f2937;
+    --bg-item:      #172033;
+    --border-color: #334155; /* distinct from hover/input/modal surfaces */
+    --border-strong: #64748b;
     --border-focus: #3b9dd4;
+
     --text-primary:    #f1f5f9;
-    --text-secondary:  #94a3b8;
-    --text-muted:      #64748b;
+    --text-secondary:  #a3b1c6;
+    --text-muted:      #8b9ab0; /* ≥4.5:1 on --bg-card */
+    --text-on-primary: #ffffff;
+    --text-on-dark:    #f1f5f9;
     --text-sidebar:    #94a3b8;
     --text-sidebar-active: #f1f5f9;
+
     --shadow-sm:  0 1px 2px 0 rgb(0 0 0 / 0.3);
     --shadow-md:  0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
     --shadow-lg:  0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);

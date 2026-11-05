@@ -272,7 +272,7 @@ export default function VisualizerPage() {
                         cx={pos.x} cy={pos.y} r={r}
                         fill={fill}
                         fillOpacity={dimmed ? 0.15 : 1}
-                        stroke={isConflicted ? "var(--color-danger)" : "white"}
+                        stroke={isConflicted ? "var(--color-danger)" : "var(--bg-card)"}
                         strokeWidth={isConflicted ? 2.5 : 1.5}
                       />
                       {!dimmed && (
@@ -344,7 +344,7 @@ export default function VisualizerPage() {
                   <Initials
                     name={selectedCandidate.fullName}
                     gender={selectedCandidate.gender}
-                    size={36}
+                    size="lg"
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
@@ -432,7 +432,7 @@ export default function VisualizerPage() {
                             ? "color-mix(in srgb, var(--color-danger) 8%, transparent)"
                             : "var(--bg-hover)",
                           border: isPending
-                            ? "1px dashed var(--border-default)"
+                            ? "1px dashed var(--border-color)"
                             : isConflict
                             ? "1px solid color-mix(in srgb, var(--color-danger) 30%, transparent)"
                             : "1px solid transparent",
@@ -441,8 +441,7 @@ export default function VisualizerPage() {
                         <Initials
                           name={otherName ?? "?"}
                           gender={other?.gender ?? "MALE"}
-                          size={24}
-                          fontSize={9}
+                          size="md"
                         />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{
@@ -520,7 +519,7 @@ export default function VisualizerPage() {
                       key={cand.id}
                       style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}
                     >
-                      <Initials name={cand.fullName} gender={cand.gender} size={24} fontSize={10} />
+                      <Initials name={cand.fullName} gender={cand.gender} size="md" />
                       <span style={{
                         fontSize: "var(--font-size-sm)",
                         color: "var(--text-primary)",

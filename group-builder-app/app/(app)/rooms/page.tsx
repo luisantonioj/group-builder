@@ -299,7 +299,7 @@ export default function RoomsPage() {
       <DragOverlay>
         {activeDragCandidate && (
           <div style={{ background: "var(--bg-card)", border: "1px solid var(--color-primary)", borderRadius: "var(--radius-md)", padding: "8px 12px", boxShadow: "var(--shadow-lg)", display: "flex", alignItems: "center", gap: "var(--space-sm)", fontSize: "var(--font-size-sm)", width: 220, opacity: 0.95 }}>
-            <Initials name={activeDragCandidate.fullName} gender={activeDragCandidate.gender} size={28} />
+            <Initials name={activeDragCandidate.fullName} gender={activeDragCandidate.gender} size="md" />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: "var(--font-weight-semibold)" }}>{activeDragCandidate.fullName}</div>
               <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
@@ -351,7 +351,7 @@ export default function RoomsPage() {
       <Modal open={editRoomOpen} title="Edit Room" onClose={() => { setEditRoomOpen(false); setEditRoomData(null); }}
         footer={
           <div style={{ display: "flex", width: "100%", justifyContent: "space-between" }}>
-            <button className="btn" style={{ color: "var(--color-danger)" }} onClick={handleDeleteRoom}>Delete Room</button>
+            <button className="btn btn-danger-outline" onClick={handleDeleteRoom}>Delete Room</button>
             <div style={{ display: "flex", gap: "var(--space-sm)" }}>
               <button className="btn btn-secondary" onClick={() => { setEditRoomOpen(false); setEditRoomData(null); }}>Cancel</button>
               <button className="btn btn-primary" onClick={handleEditRoom}>Save Changes</button>
@@ -441,7 +441,7 @@ function RoomDraggableCard({ candidate: c, groups }: { candidate: Candidate; gro
         boxShadow: "none",
       }}
     >
-      <Initials name={c.fullName} gender={c.gender} size={26} fontSize={10} />
+      <Initials name={c.fullName} gender={c.gender} size="md" />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "var(--font-size-sm)", fontWeight: "var(--font-weight-medium)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.fullName}</div>
         {groupName && <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{groupName}</div>}
@@ -481,7 +481,7 @@ function RoomDraggableMember({ candidate: m, isConflict, onTogglePresence, group
         boxShadow: "none",
       }}
     >
-      <Initials name={m.fullName} gender={m.gender} size={22} fontSize={9} />
+      <Initials name={m.fullName} gender={m.gender} size="sm" />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)", color: isConflict ? "var(--color-conflict-text)" : "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {m.fullName}{isConflict && " ⚠"}
@@ -544,7 +544,7 @@ function RoomDropZone({ room, members, conflictItems, isOver, groups, onTogglePr
             <path d="M2 4v16" /><path d="M2 8h18a2 2 0 0 1 2 2v10" /><path d="M2 17h20" /><path d="M6 8v9" />
           </svg>
           <span style={{ fontWeight: "var(--font-weight-semibold)", fontSize: "var(--font-size-sm)" }}>{room.name}</span>
-          <GenderChip gender={room.gender === "MIXED" ? "MALE" : room.gender as Gender} />
+          <GenderChip gender={room.gender} />
           {hasConflicts && <Chip kind="danger">⚠ {conflictItems.length}</Chip>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)" }}>

@@ -520,7 +520,7 @@ export default function MasterlistPage() {
 
       {/* Filters */}
       <div style={{ display: "flex", gap: "var(--space-sm)", marginBottom: "var(--space-lg)", alignItems: "center", flexWrap: "wrap" }}>
-        <SearchInput value={search} onChange={setSearch} placeholder="Search name, school, inviter…" className="search-input" />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search name, school, inviter…" />
 
         {/* Gender toggle */}
         <div style={{ display: "flex", gap: 2, background: "var(--bg-hover)", borderRadius: "var(--radius-sm)", padding: 3 }}>
@@ -545,7 +545,7 @@ export default function MasterlistPage() {
           {/* Active sort chip */}
           {sortConfig && activeSortLabel && (
             <div
-              style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--bg-hover)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-sm)", padding: "3px 8px", fontSize: "var(--font-size-xs)", cursor: "pointer" }}
+              style={{ display: "flex", alignItems: "center", gap: 4, background: "var(--bg-hover)", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", padding: "3px 8px", fontSize: "var(--font-size-xs)", cursor: "pointer" }}
               onClick={() => setSortModalOpen(true)}
             >
               <span style={{ color: "var(--text-secondary)" }}>
@@ -642,7 +642,7 @@ export default function MasterlistPage() {
                     </td>
                     <td>
                       <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-                        <Initials name={c.fullName} gender={c.gender} size={28} />
+                        <Initials name={c.fullName} gender={c.gender} size="md" />
                         <div>
                           <div style={{ fontWeight: "var(--font-weight-semibold)", color: "var(--text-primary)" }}>{c.fullName}</div>
                           {c.allergies && <AllergyBadge allergies={c.allergies} />}
@@ -1007,10 +1007,10 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
             <p style={{ fontSize: "var(--font-size-xs)", fontWeight: 600, color: "var(--text-muted)", marginBottom: "var(--space-sm)", textTransform: "uppercase", letterSpacing: "0.025em" }}>
               File Preview (First 3 rows)
             </p>
-            <div style={{ overflowX: "auto", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-sm)", background: "var(--bg-hover)" }}>
+            <div style={{ overflowX: "auto", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", background: "var(--bg-hover)" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "10px" }}>
                 <thead>
-                  <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                  <tr style={{ borderBottom: "1px solid var(--border-color)" }}>
                     {headers.map((h) => (
                       <th key={h} style={{ textAlign: "left", padding: "6px 8px", background: "var(--bg-card)", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
@@ -1018,7 +1018,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
                 </thead>
                 <tbody>
                   {previewRows.map((row, i) => (
-                    <tr key={i} style={{ borderBottom: i < previewRows.length - 1 ? "1px solid var(--border-subtle)" : undefined }}>
+                    <tr key={i} style={{ borderBottom: i < previewRows.length - 1 ? "1px solid var(--border-color)" : undefined }}>
                       {headers.map((h) => (
                         <td key={h} style={{ padding: "6px 8px", color: "var(--text-muted)", whiteSpace: "nowrap" }}>{String(row[h] ?? "")}</td>
                       ))}
@@ -1045,7 +1045,7 @@ function ImportModal({ headers, rows, initialMapping, importing, onClose, onConf
               </thead>
               <tbody>
                 {parsedCandidates.map((c, idx) => (
-                  <tr key={idx} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                  <tr key={idx} style={{ borderBottom: "1px solid var(--border-color)" }}>
                     <td style={{ padding: "var(--space-sm) var(--space-md)", color: "var(--text-primary)", fontWeight: 500 }}>{c.fullName}</td>
                     <td style={{ padding: "var(--space-sm) var(--space-md)" }}>
                       <select
@@ -1177,7 +1177,7 @@ function CandidateModal({
         Connections
         {confirmedConns.length > 0 && (
           <span style={{
-            marginLeft: 6, background: "var(--color-accent)", color: "#fff",
+            marginLeft: 6, background: "var(--color-accent)", color: "var(--text-on-primary)",
             borderRadius: 10, fontSize: "0.7em", padding: "1px 6px", fontWeight: 600,
           }}>
             {confirmedConns.length}
@@ -1186,7 +1186,7 @@ function CandidateModal({
         {pendingConns.length > 0 && (
           <span style={{
             marginLeft: 4, background: "var(--bg-hover)", color: "var(--text-secondary)",
-            border: "1px solid var(--border-default)",
+            border: "1px solid var(--border-color)",
             borderRadius: 10, fontSize: "0.7em", padding: "1px 6px", fontWeight: 600,
           }}>
             ?{pendingConns.length}
@@ -1203,7 +1203,7 @@ function CandidateModal({
     <Modal open title={isNew ? "Add Candidate" : initial.fullName} onClose={onClose} size="lg"
       footer={
         <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-          {!isNew && <button type="button" className="btn btn-danger" onClick={() => onDelete(form.id)}>
+          {!isNew && <button type="button" className="btn btn-danger-outline" onClick={() => onDelete(form.id)}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
               <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14H6L5 6" /><path d="M9 6V4h6v2" />
             </svg>
@@ -1279,7 +1279,7 @@ function CandidateModal({
               {form.allergies && <p style={{ fontSize: "var(--font-size-xs)", color: "var(--color-warning)", marginTop: 2 }}>⚠ This will be flagged on the candidate card and in reports.</p>}
             </div>
 
-            <div className="form-group" style={{ marginTop: "var(--space-md)", background: "var(--bg-hover)", padding: "var(--space-md)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-default)" }}>
+            <div className="form-group" style={{ marginTop: "var(--space-md)", background: "var(--bg-hover)", padding: "var(--space-md)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border-color)" }}>
               <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
                 <input
                   type="checkbox"
@@ -1335,7 +1335,7 @@ function CandidateModal({
                   {connSearchResults.length > 0 && (
                     <div style={{
                       position: "absolute", top: "calc(100% + 2px)", left: 0, right: 0,
-                      background: "var(--bg-card)", border: "1px solid var(--border-default)",
+                      background: "var(--bg-card)", border: "1px solid var(--border-color)",
                       borderRadius: "var(--radius-sm)", zIndex: 20,
                       maxHeight: 200, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                     }}>
@@ -1349,7 +1349,7 @@ function CandidateModal({
                             display: "flex", alignItems: "center", gap: "var(--space-sm)",
                           }}
                         >
-                          <Initials name={c.fullName} gender={c.gender} size={28} />
+                          <Initials name={c.fullName} gender={c.gender} size="md" />
                           <div>
                             <div style={{ fontSize: "var(--font-size-sm)", fontWeight: 500 }}>{c.fullName}</div>
                             {c.school && <div style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>{c.school}</div>}
@@ -1415,17 +1415,17 @@ function CandidateModal({
                       background: isPending
                         ? "color-mix(in srgb, var(--color-warning) 6%, var(--bg-hover))"
                         : "var(--bg-hover)",
-                      border: isPending ? "1px dashed var(--border-default)" : "1px solid transparent",
+                      border: isPending ? "1px dashed var(--border-color)" : "1px solid transparent",
                       borderRadius: "var(--radius-sm)",
                       opacity: isPending ? 0.85 : 1,
                     }}
                   >
                     <div style={{ position: "relative" }}>
-                      <Initials name={otherName ?? "?"} gender={other?.gender ?? "MALE"} size={28} />
+                      <Initials name={otherName ?? "?"} gender={other?.gender ?? "MALE"} size="md" />
                       {isPending && (
                         <span style={{
                           position: "absolute", bottom: -2, right: -2,
-                          background: "var(--color-warning)", color: "#fff",
+                          background: "var(--color-warning)", color: "var(--text-on-primary)",
                           borderRadius: "50%", width: 12, height: 12,
                           fontSize: 9, fontWeight: 700, display: "flex",
                           alignItems: "center", justifyContent: "center", lineHeight: 1,
