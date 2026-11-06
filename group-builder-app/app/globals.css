@@ -1945,3 +1945,133 @@ tbody td {
   0% { background-position: 100% 50%; }
   100% { background-position: 0 50%; }
 }
+
+/* ─── Truncating chips ───────────────────────────────────────────────────────── */
+.chip-truncate {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+.chip-truncate,
+.chip-truncate .chip-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip-truncate:not(:has(.chip-text)) { display: inline-block; }
+.chip-truncate .chip-text { min-width: 0; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ─── Masterlist table: fits the card, no horizontal scroll ─────────────────── */
+.ml-table { table-layout: fixed; }
+.ml-table thead th,
+.ml-table tbody td { padding: 10px var(--space-sm); }
+.ml-table thead th:first-child,
+.ml-table tbody td:first-child { padding-left: var(--space-md); }
+.ml-table thead th:last-child,
+.ml-table tbody td:last-child { padding-right: var(--space-md); }
+.ml-table thead th { overflow: hidden; text-overflow: ellipsis; }
+
+.ml-table thead th.ml-center { width: 104px; }
+.ml-table thead th.ml-gender { width: 104px; }
+.ml-table thead th.ml-age { width: 60px; }
+.ml-table thead th.ml-inviter { width: 14%; }
+.ml-table thead th.ml-conn { width: 76px; }
+.ml-table thead th.ml-group { width: 13%; }
+.ml-table thead th.ml-room { width: 13%; }
+.ml-table thead th.ml-extra { width: 12%; }
+.ml-table thead th.ml-actions-head { width: 96px; }
+
+.ml-center { text-align: center; }
+.ml-mono { font-family: var(--font-mono); color: var(--text-secondary); }
+.ml-muted { color: var(--text-secondary); font-size: var(--font-size-xs); }
+.ml-trunc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-dash { color: var(--text-muted); font-size: var(--font-size-xs); }
+
+.ml-name-cell { display: flex; align-items: center; gap: var(--space-sm); min-width: 0; }
+.ml-name-text { min-width: 0; flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.ml-name {
+  max-width: 100%;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ml-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-xs); }
+.ml-actions input[type="checkbox"] { width: 16px; height: 16px; margin: 0 8px; cursor: pointer; }
+.ml-actions-head { text-align: right; }
+.ml-select-label { font-size: var(--font-size-xs); color: var(--text-muted); font-weight: var(--font-weight-normal); text-transform: none; letter-spacing: 0; }
+
+/* Drop lower-priority columns as the table gets narrower instead of scrolling sideways.
+   Container queries measure the table itself, so the sidebar width is accounted for. */
+.ml-wrap { container-type: inline-size; container-name: masterlist; }
+.ml-table thead th.ml-center { letter-spacing: 0.02em; }
+
+@container masterlist (max-width: 1040px) {
+  .ml-table .ml-inviter { display: none; }
+}
+@container masterlist (max-width: 860px) {
+  .ml-table .ml-conn,
+  .ml-table .ml-room,
+  .ml-table .ml-extra { display: none; }
+  .ml-table thead th.ml-group { width: 22%; }
+}
+@container masterlist (max-width: 600px) {
+  .ml-table .ml-gender,
+  .ml-table .ml-age,
+  .ml-table .ml-group { display: none; }
+  .ml-table thead th.ml-center { width: 52px; font-size: 0; }
+  .ml-table thead th.ml-center::after { content: "✓"; font-size: var(--font-size-xs); }
+  .ml-table thead th.ml-actions-head { width: 48px; }
+  .ml-select-label { display: none; }
+  /* Tapping the row opens the editor, so the pencil isn't needed on phones */
+  .ml-actions .icon-btn { display: none; }
+}
+
+/* ─── Presence note (Groups/Rooms subtitle) ──────────────────────────────────── */
+.presence-note { display: flex; align-items: flex-start; gap: 6px; }
+.presence-note-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  background: var(--color-primary);
+  color: var(--text-on-primary);
+}
+.presence-note-count { color: var(--text-primary); font-weight: var(--font-weight-semibold); white-space: nowrap; }
+
+/* ─── Reports: compact member tables inside group cards ─────────────────────── */
+.report-mini-table { table-layout: fixed; font-size: var(--font-size-xs); }
+.report-mini-table thead th,
+.report-mini-table tbody td { padding: 8px 10px; }
+.report-mini-table thead th:first-child,
+.report-mini-table tbody td:first-child { padding-left: var(--space-md); }
+.report-mini-table thead th.rm-age { width: 44px; }
+.report-mini-table thead th.rm-room { width: 27%; }
+.report-mini-table thead th.rm-notes { width: 22%; }
+.rm-name-cell { display: flex; align-items: center; gap: var(--space-xs); min-width: 0; }
+.rm-name {
+  font-weight: var(--font-weight-medium);
+  min-width: 0;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+.rm-mono { font-family: var(--font-mono); }
+.rm-trunc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -27,6 +27,7 @@ import { BedIcon, CollapseIcon, EditIcon } from "@/components/ui/icons";
 import {
   DraggableCandidate,
   DragOverlayCard,
+  PresenceNote,
   PresenceToggle,
   UnconfirmedLegend,
   formatAge,
@@ -212,7 +213,10 @@ export default function RoomsPage() {
         <div className="page-header">
           <div>
             <h1 className="page-title">Room Assignment</h1>
-            <p className="page-sub">{totalOccupied} / {totalCapacity} beds filled</p>
+            <PresenceNote
+              present={candidates.filter((c) => c.roomId && c.isPresent).length}
+              total={totalOccupied}
+            />
           </div>
           <div style={{ display: "flex", gap: "var(--space-sm)" }}>
             <button className="btn btn-primary" onClick={() => setAddRoomOpen(true)}>+ Add Room</button>

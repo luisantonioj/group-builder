@@ -28,6 +28,15 @@ export function GenderChip({ gender }: { gender: Gender | "MIXED" }) {
   );
 }
 
-export function AllergyBadge({ allergies }: { allergies: string }) {
-  return <Chip kind="allergy">⚠ {allergies}</Chip>;
+/** Allergy flag. Long text is truncated to one line by default; hover shows the full text. */
+export function AllergyBadge({ allergies, truncate = true }: { allergies: string; truncate?: boolean }) {
+  return (
+    <Chip kind="allergy" className={truncate ? "chip-truncate" : undefined} title={allergies}>
+      <span aria-hidden="true">⚠</span>
+      <span className="chip-text">
+        <span className="sr-only">Allergies: </span>
+        {allergies}
+      </span>
+    </Chip>
+  );
 }

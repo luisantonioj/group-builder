@@ -8,16 +8,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Keep --current-sidebar-width in sync with state and viewport
   useEffect(() => {
+    // Same breakpoint as the CSS (max-width: 1023px). matchMedia fires on every
+    // breakpoint change (rotation, zoom, devtools emulation), unlike a resize check.
+    const mobileQuery = window.matchMedia("(max-width: 1023px)");
     function update() {
-      const isMobile = window.innerWidth < 1024;
       document.documentElement.style.setProperty(
         "--current-sidebar-width",
-        isMobile ? "0px" : collapsed ? "64px" : "var(--sidebar-width)"
+        mobileQuery.matches ? "0px" : collapsed ? "64px" : "var(--sidebar-width)"
       );
     }
     update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    mobileQuery.addEventListener("change", update);
+    return () => mobileQuery.removeEventListener("change", update);
   }, [collapsed]);
 
   return (
