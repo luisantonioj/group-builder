@@ -137,6 +137,7 @@ export default function ReportsPage() {
 
     XLSX.writeFile(wb, `${batch.name || "Event"}_Reports.xlsx`);
     setExportOpen(false);
+    showToast(`Exported ${wb.SheetNames.length} sheet${wb.SheetNames.length !== 1 ? "s" : ""} to Excel`, "success");
   }
 
   function handlePrintPDF() {
@@ -189,28 +190,16 @@ export default function ReportsPage() {
 
       {/* Tabs */}
       <div className="tabs" style={{ marginBottom: "var(--space-xl)" }}>
-        {(["groups", "rooms", "conflicts", "allergies", "contacts"] as const).map((t) => {
-          const isComingSoon = ["conflicts", "allergies", "contacts"].includes(t);
-          return (
-            <button
-              key={t}
-              className={`tab ${tab === t ? "active" : ""}`}
-              onClick={() => {
-                if (isComingSoon) {
-                  showToast("Coming soon feature", "info");
-                } else {
-                  setTab(t);
-                }
-              }}
-              style={{
-                opacity: isComingSoon ? 0.5 : 1,
-                cursor: isComingSoon ? "not-allowed" : "pointer"
-              }}
-            >
-              {t === "allergies" ? "Allergies & Care" : t === "contacts" ? "Emergency Contacts" : t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          );
-        })}
+        {(["groups", "rooms", "conflicts", "allergies", "contacts"] as const).map((t) => (
+          <button
+            key={t}
+            className={`tab ${tab === t ? "active" : ""}`}
+            aria-pressed={tab === t}
+            onClick={() => setTab(t)}
+          >
+            {t === "allergies" ? "Allergies & Care" : t === "contacts" ? "Emergency Contacts" : t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
       </div>
 
       {/* Group Rosters */}
@@ -459,16 +448,16 @@ export default function ReportsPage() {
               <input type="checkbox" checked={exportOptions.rooms} onChange={(e) => setExportOptions((prev) => ({ ...prev, rooms: e.target.checked }))} />
               <span className="form-label" style={{ margin: 0 }}>Rooms</span>
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "not-allowed", opacity: 0.5 }} title="Coming soon">
-              <input type="checkbox" checked={exportOptions.conflicts} disabled onChange={(e) => setExportOptions((prev) => ({ ...prev, conflicts: e.target.checked }))} />
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
+              <input type="checkbox" checked={exportOptions.conflicts} onChange={(e) => setExportOptions((prev) => ({ ...prev, conflicts: e.target.checked }))} />
               <span className="form-label" style={{ margin: 0 }}>Conflicts</span>
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "not-allowed", opacity: 0.5 }} title="Coming soon">
-              <input type="checkbox" checked={exportOptions.allergies} disabled onChange={(e) => setExportOptions((prev) => ({ ...prev, allergies: e.target.checked }))} />
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
+              <input type="checkbox" checked={exportOptions.allergies} onChange={(e) => setExportOptions((prev) => ({ ...prev, allergies: e.target.checked }))} />
               <span className="form-label" style={{ margin: 0 }}>Allergies & Care</span>
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "not-allowed", opacity: 0.5 }} title="Coming soon">
-              <input type="checkbox" checked={exportOptions.contacts} disabled onChange={(e) => setExportOptions((prev) => ({ ...prev, contacts: e.target.checked }))} />
+            <label style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", cursor: "pointer" }}>
+              <input type="checkbox" checked={exportOptions.contacts} onChange={(e) => setExportOptions((prev) => ({ ...prev, contacts: e.target.checked }))} />
               <span className="form-label" style={{ margin: 0 }}>Emergency Contacts</span>
             </label>
           </div>

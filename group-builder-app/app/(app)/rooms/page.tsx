@@ -253,7 +253,7 @@ export default function RoomsPage() {
           ))}
         </div>
 
-        <div className="groups-layout">
+        <div className="groups-layout rooms-board">
           {/* Candidate Pool */}
           <div className={cn("pool-sidebar", poolCollapsed && "collapsed")}>
             <div className="card" style={{ height: "100%", display: "flex", flexDirection: "column" }}>

@@ -504,7 +504,6 @@ export default function MasterlistPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Masterlist</h1>
-          <p className="page-sub">{candidates.length} candidates · {batch.name}</p>
         </div>
         <div style={{ display: "flex", gap: "var(--space-sm)" }}>
           {selectedIds.length > 0 && (
