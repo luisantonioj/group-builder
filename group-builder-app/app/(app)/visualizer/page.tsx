@@ -9,6 +9,7 @@ import Modal from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { formatConnectionLabel } from "@/lib/utils";
 import { pressable } from "@/lib/a11y";
+import SegmentedControl from "@/components/ui/segmented-control";
 import type { Connection } from "@/types";
 
 type Tab = "graph" | "clusters" | "table";
@@ -196,15 +197,16 @@ export default function VisualizerPage() {
               borderBottom: "1px solid var(--border-color)",
               display: "flex", gap: "var(--space-sm)", alignItems: "center",
             }}>
-              {(["all", "unassigned", "conflicts"] as const).map((f) => (
-                <button
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className={`btn btn-sm ${filter === f ? "btn-primary" : "btn-secondary"}`}
-                >
-                  {f.charAt(0).toUpperCase() + f.slice(1)}
-                </button>
-              ))}
+              <SegmentedControl
+                label="Filter graph"
+                value={filter}
+                onChange={setFilter}
+                options={[
+                  { value: "all", label: "All" },
+                  { value: "unassigned", label: "Unassigned" },
+                  { value: "conflicts", label: "Conflicts" },
+                ]}
+              />
               <span style={{ marginLeft: "auto", fontSize: "var(--font-size-xs)", color: "var(--text-muted)" }}>
                 Click a node to inspect · Blue = Male · Pink = Female · Red dashed = conflict
               </span>

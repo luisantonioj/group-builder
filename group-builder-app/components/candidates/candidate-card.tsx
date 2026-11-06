@@ -107,3 +107,22 @@ export function UnconfirmedLegend() {
     </div>
   );
 }
+
+/** Page subtitle explaining the presence checkbox, with a running count. */
+export function PresenceNote({ present, total, extra }: { present: number; total: number; extra?: string }) {
+  return (
+    <p className="page-sub presence-note">
+      <span className="presence-note-box" aria-hidden="true">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </span>
+      <span>
+        Tick the box beside a name to mark them present{extra ? ` ${extra}` : ""}.
+        <span className="presence-note-count">
+          {" "}{present} of {total} present
+        </span>
+      </span>
+    </p>
+  );
+}

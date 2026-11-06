@@ -35,6 +35,7 @@ import { CollapseIcon, EditIcon, GripIcon } from "@/components/ui/icons";
 import {
   DraggableCandidate,
   DragOverlayCard,
+  PresenceNote,
   PresenceToggle,
   UnconfirmedLegend,
   formatAge,
@@ -295,7 +296,11 @@ export default function GroupsPage() {
         <div className="page-header">
           <div>
             <h1 className="page-title">Group Formation</h1>
-            <p className="page-sub">{totalAssigned} assigned · {candidates.filter((c) => !c.groupId).length} in pool</p>
+            <PresenceNote
+              present={candidates.filter((c) => c.groupId && c.isPresent).length}
+              total={totalAssigned}
+              extra="(hidden in locked groups)"
+            />
           </div>
           <div style={{ display: "flex", gap: "var(--space-sm)" }}>
             <button className="btn btn-ghost" onClick={handleClearAll} disabled={totalAssigned === 0}>Clear All</button>

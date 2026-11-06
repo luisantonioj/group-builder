@@ -230,14 +230,14 @@ export default function ReportsPage() {
                     <Chip kind="female">{members.filter((m) => m.gender === "FEMALE").length} ♀</Chip>
                   </div>
                 </div>
-                <div style={{ overflowX: "auto" }}>
-                  <table>
+                <div>
+                  <table className="report-mini-table">
                     <thead>
                       <tr>
                         <th>Name</th>
-                        <th>Age</th>
-                        <th>Room</th>
-                        <th>Notes</th>
+                        <th className="rm-age">Age</th>
+                        <th className="rm-room">Room</th>
+                        <th className="rm-notes">Notes</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -246,13 +246,13 @@ export default function ReportsPage() {
                         return (
                           <tr key={m.id}>
                             <td>
-                              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-xs)" }}>
+                              <div className="rm-name-cell">
                                 <Initials name={m.fullName} gender={m.gender} size="sm" />
-                                <span style={{ fontSize: "var(--font-size-xs)", fontWeight: "var(--font-weight-medium)" }}>{m.fullName}</span>
+                                <span className="rm-name" title={m.fullName}>{m.fullName}</span>
                               </div>
                             </td>
-                            <td style={{ fontSize: "var(--font-size-xs)", fontFamily: "var(--font-mono)" }}>{m.age ?? "—"}</td>
-                            <td style={{ fontSize: "var(--font-size-xs)" }}>{room?.name ?? "—"}</td>
+                            <td className="rm-mono">{m.age ?? "—"}</td>
+                            <td className="rm-trunc" title={room?.name}>{room?.name ?? "—"}</td>
                             <td>{m.allergies && <AllergyBadge allergies={m.allergies} />}</td>
                           </tr>
                         );
@@ -382,7 +382,7 @@ export default function ReportsPage() {
                     <td style={{ fontFamily: "var(--font-mono)" }}>{c.age ?? "—"}</td>
                     <td>{groups.find((g) => g.id === c.groupId)?.name ?? "—"}</td>
                     <td>{rooms.find((r) => r.id === c.roomId)?.name ?? "—"}</td>
-                    <td><AllergyBadge allergies={c.allergies!} /></td>
+                    <td><AllergyBadge allergies={c.allergies!} truncate={false} /></td>
                   </tr>
                 ))}
                 {candidates.filter((c) => c.allergies).length === 0 && (

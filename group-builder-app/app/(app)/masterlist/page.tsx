@@ -9,6 +9,7 @@ import { Chip, GenderChip, AllergyBadge } from "@/components/ui/chip";
 import Modal from "@/components/ui/modal";
 import Initials from "@/components/ui/initials";
 import SegmentedControl from "@/components/ui/segmented-control";
+import { EditIcon } from "@/components/ui/icons";
 import { keyActivate, pressable } from "@/lib/a11y";
 import { formatConnectionLabel } from "@/lib/utils";
 import type { Candidate, Connection, Gender, RelationshipType } from "@/types";
@@ -608,26 +609,26 @@ export default function MasterlistPage() {
 
       {/* Table */}
       <div className="card">
-        <div className="table-wrapper">
-          <table>
+        <div className="table-wrapper ml-wrap">
+          <table className="ml-table">
             <thead>
               <tr>
-                <th style={{ width: 60, textAlign: "center" }}>Conf.</th>
+                <th className="ml-center">Confirmed</th>
                 <th style={thSort} onClick={() => handleSort("fullName")} {...keyActivate(() => handleSort("fullName"))}>Name{sortArrow("fullName")}</th>
-                <th style={thSort} onClick={() => handleSort("gender")} {...keyActivate(() => handleSort("gender"))}>Gender{sortArrow("gender")}</th>
-                <th style={thSort} onClick={() => handleSort("age")} {...keyActivate(() => handleSort("age"))}>Age{sortArrow("age")}</th>
-                <th style={thSort} onClick={() => handleSort("inviterName")} {...keyActivate(() => handleSort("inviterName"))}>Inviter{sortArrow("inviterName")}</th>
-                <th style={thSort} onClick={() => handleSort("connections")} {...keyActivate(() => handleSort("connections"))}>Connections{sortArrow("connections")}</th>
-                <th style={thSort} onClick={() => handleSort("group")} {...keyActivate(() => handleSort("group"))}>Group{sortArrow("group")}</th>
-                <th style={thSort} onClick={() => handleSort("room")} {...keyActivate(() => handleSort("room"))}>Room{sortArrow("room")}</th>
+                <th className="ml-gender" style={thSort} onClick={() => handleSort("gender")} {...keyActivate(() => handleSort("gender"))}>Gender{sortArrow("gender")}</th>
+                <th className="ml-age" style={thSort} onClick={() => handleSort("age")} {...keyActivate(() => handleSort("age"))}>Age{sortArrow("age")}</th>
+                <th className="ml-inviter" style={thSort} onClick={() => handleSort("inviterName")} {...keyActivate(() => handleSort("inviterName"))}>Inviter{sortArrow("inviterName")}</th>
+                <th className="ml-conn" style={thSort} onClick={() => handleSort("connections")} {...keyActivate(() => handleSort("connections"))} title="Connections">Links{sortArrow("connections")}</th>
+                <th className="ml-group" style={thSort} onClick={() => handleSort("group")} {...keyActivate(() => handleSort("group"))}>Group{sortArrow("group")}</th>
+                <th className="ml-room" style={thSort} onClick={() => handleSort("room")} {...keyActivate(() => handleSort("room"))}>Room{sortArrow("room")}</th>
                 {activeExtraCols.map((col) => (
-                  <th key={col.key as string} style={thSort} onClick={() => handleSort(col.key as string)} {...keyActivate(() => handleSort(col.key as string))}>
+                  <th key={col.key as string} className="ml-extra" style={thSort} onClick={() => handleSort(col.key as string)} {...keyActivate(() => handleSort(col.key as string))} title={col.label}>
                     {col.label}{sortArrow(col.key as string)}
                   </th>
                 ))}
-                <th style={{ textAlign: "right", width: 120 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12 }}>
-                    <span style={{ fontSize: "var(--font-size-xs)", color: "var(--text-muted)", fontWeight: "normal" }}>Select</span>
+                <th className="ml-actions-head">
+                  <div className="ml-actions">
+                    <span className="ml-select-label">Select</span>
                     <input
                       type="checkbox"
                       checked={filtered.length > 0 && selectedIds.length === filtered.length}
@@ -648,7 +649,7 @@ export default function MasterlistPage() {
                 const isSelected = selectedIds.includes(c.id);
                 return (
                   <tr key={c.id} onClick={() => { setIsAddNew(false); setEditCandidate(c); }} {...keyActivate(() => { setIsAddNew(false); setEditCandidate(c); })} aria-label={`Open ${c.fullName}`} className="row-clickable" style={{ background: isSelected ? "var(--bg-hover)" : undefined }}>
-                    <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
+                    <td onClick={(e) => e.stopPropagation()} className="ml-center">
                       <input
                         type="checkbox"
                         checked={c.isConfirmed}
@@ -664,39 +665,40 @@ export default function MasterlistPage() {
                       />
                     </td>
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                      <div className="ml-name-cell">
                         <Initials name={c.fullName} gender={c.gender} size="md" />
-                        <div>
-                          <div style={{ fontWeight: "var(--font-weight-semibold)", color: "var(--text-primary)" }}>{c.fullName}</div>
+                        <div className="ml-name-text">
+                          <div className="ml-name" title={c.fullName}>{c.fullName}</div>
                           {c.allergies && <AllergyBadge allergies={c.allergies} />}
                         </div>
                       </div>
                     </td>
-                    <td><GenderChip gender={c.gender} /></td>
-                    <td style={{ fontFamily: "var(--font-mono)", color: "var(--text-secondary)" }}>{c.age ?? "—"}</td>
-                    <td style={{ color: "var(--text-secondary)", fontSize: "var(--font-size-xs)" }}>{c.inviterName ?? "—"}</td>
-                    <td>
+                    <td className="ml-gender"><GenderChip gender={c.gender} /></td>
+                    <td className="ml-age ml-mono">{c.age ?? "—"}</td>
+                    <td className="ml-inviter ml-muted ml-trunc" title={c.inviterName ?? undefined}>{c.inviterName ?? "—"}</td>
+                    <td className="ml-conn">
                       <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
                         {connCount > 0 && <Chip kind="warning">⚠ {connCount}</Chip>}
                         {pendingCount > 0 && <Chip kind="default" style={{ opacity: 0.75 }}>? {pendingCount}</Chip>}
                         {connCount === 0 && pendingCount === 0 && <span style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>0</span>}
                       </div>
                     </td>
-                    <td>{group ? <Chip kind="accent">{group.name}</Chip> : <span style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>—</span>}</td>
-                    <td>{room ? <Chip kind="default">{room.name}</Chip> : <span style={{ color: "var(--text-muted)", fontSize: "var(--font-size-xs)" }}>—</span>}</td>
+                    <td className="ml-group">{group ? <Chip kind="accent" className="chip-truncate" title={group.name}>{group.name}</Chip> : <span className="ml-dash">—</span>}</td>
+                    <td className="ml-room">{room ? <Chip kind="default" className="chip-truncate" title={room.name}>{room.name}</Chip> : <span className="ml-dash">—</span>}</td>
                     {activeExtraCols.map((col) => (
-                      <td key={col.key as string} style={{ color: "var(--text-secondary)", fontSize: "var(--font-size-xs)" }}>
+                      <td key={col.key as string} className="ml-extra ml-muted ml-trunc" title={String(c[col.key] ?? "")}>
                         {String(c[col.key] ?? "—")}
                       </td>
                     ))}
                     <td onClick={(e) => e.stopPropagation()}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => { setIsAddNew(false); setEditCandidate(c); }} style={{ padding: "4px 8px" }}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                          </svg>
-                          Edit
+                      <div className="ml-actions">
+                        <button
+                          className="icon-btn"
+                          onClick={() => { setIsAddNew(false); setEditCandidate(c); }}
+                          aria-label={`Edit ${c.fullName}`}
+                          title="Edit"
+                        >
+                          <EditIcon />
                         </button>
                         <input
                           type="checkbox"

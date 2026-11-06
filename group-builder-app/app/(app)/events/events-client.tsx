@@ -145,7 +145,7 @@ export default function EventsClient({ isAdmin }: { isAdmin: boolean }) {
           <p style={{ fontSize: "var(--font-size-lg)", marginBottom: "var(--space-md)" }}>No events yet.</p>
           {isAdmin && (
             <a href="/events/setup" className="btn btn-primary" style={{ display: "inline-flex", textDecoration: "none" }}>
-              Create your first {terms.event.toLowerCase()}
+              Create your first {terms.event}
             </a>
           )}
         </div>
