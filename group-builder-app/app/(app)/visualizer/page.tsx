@@ -165,9 +165,6 @@ export default function VisualizerPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Connection Visualizer</h1>
-          <p className="page-sub">
-            {connections.length} connections · {clusters.length} clusters
-          </p>
         </div>
         <button className="btn btn-primary" onClick={() => setAddConnOpen(true)}>
           + Add Connection

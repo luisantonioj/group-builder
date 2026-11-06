@@ -2075,3 +2075,49 @@ tbody td {
 }
 .rm-mono { font-family: var(--font-mono); }
 .rm-trunc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Square icon-only button that matches .btn height (e.g. theme toggle next to Refresh) */
+.btn-icon { width: 40px; padding: 0; justify-content: center; color: var(--text-secondary); }
+.btn-icon svg { display: block; }
+
+/* ─── Collapsed pool (desktop) ───────────────────────────────────────────────── */
+@media (min-width: 1024px) {
+  /* Give the freed space to the boards instead of leaving an empty 300px column */
+  .groups-layout:has(.pool-sidebar.collapsed) { grid-template-columns: 54px minmax(0, 1fr); }
+
+  .pool-sidebar.collapsed .pool-head {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--space-md);
+    padding: var(--space-sm) 0;
+    border-bottom: none;
+  }
+  .pool-sidebar.collapsed .pool-head > div:first-child {
+    order: 2;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+  }
+  .pool-sidebar.collapsed .pool-sub { display: none; }
+}
+
+/* ─── Rooms board: columns line up with the stat tiles above ────────────────── */
+@media (min-width: 1280px) {
+  .rooms-board {
+    grid-template-columns: repeat(4, minmax(0, 1fr)); /* same as .stat-grid */
+    column-gap: var(--space-lg);
+  }
+  .rooms-board > .assign-grid {
+    grid-column: 2 / -1;
+    grid-template-columns: subgrid;
+  }
+  .rooms-board:has(.pool-sidebar.collapsed) { grid-template-columns: 54px minmax(0, 1fr); }
+  .rooms-board:has(.pool-sidebar.collapsed) > .assign-grid {
+    grid-column: auto;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}
+/* Top-bar buttons share one exact height so the theme toggle matches Refresh */
+.topbar .btn { height: 40px; min-height: 40px; padding-top: 0; padding-bottom: 0; }
+.topbar .btn-icon { width: auto; aspect-ratio: 1 / 1; }
